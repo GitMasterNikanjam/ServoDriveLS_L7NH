@@ -1,4 +1,4 @@
-#include "L7NH.h"
+#include "ServoDriveLS_L7NH.h"
 
 // use namespace for prevent confilict to other sources.
 namespace _L7NH

@@ -6,7 +6,7 @@
 #include <chrono>                   // For time managements
 #include <thread>                   // For thread programming
 #include "ethercat.h"               // SOEM EtherCAT functionality 
-#include "L7NH_objDict.h"           // Object dictionary for L7NH drivers
+#include "ServoDriveLS_L7NH_objDict.h"           // Object dictionary for L7NH drivers
 
 // ####################################################
 
