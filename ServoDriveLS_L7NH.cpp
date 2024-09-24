@@ -36,11 +36,24 @@ void L7NH::statesClear(void)
     states.velActRaw_cmd = 0;
 }
 
-void L7NH::setSlaveID(int ID_num)
+bool L7NH::setSlaveID(int ID_num)
 {
     slaveID = ID_num;
 
+    if(std::string(ec_slave[ID_num].name) == "")
+    {
+        errorMessage = "Error L7NH: Motor drive can not detected.";
+        return false;
+    }
     PulsePerRevolution = getEncoderPulsePerRevolution();
+
+    if(PulsePerRevolution == 0)
+    {
+        errorMessage = "Error L7NH: Motor drive communication problem.";
+        return false;
+    }
+
+    return true;
 }
 
 // +++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -530,7 +543,12 @@ int16_t L7NH::getNodeID(void)
     osal_usleep(1000);
 
     if(wkc <= 0)
+    {
+        errorMessage = "Error L7NH: There is a problem for ethercat connection.";
+        std::cout << errorMessage << std::endl;
         return -1;
+    }
+        
 
     return (int16_t)ID;
 }
@@ -570,6 +588,7 @@ uint32_t L7NH::getEncoderPulsePerRevolution(void)
     int wkc;
     int size = 4;
     uint32_t data;
+    printf("debug\n");
     wkc = ec_SDOread(slaveID, Index_EncoderPulsePerRevolution, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
     osal_usleep(1000);
 
@@ -1238,6 +1257,83 @@ bool L7NH::setTargetVelocitySDO(int32_t velocity)
         return FALSE;
 
     return TRUE;
+}
+
+bool L7NH::setMaxProfileVelocitySDO(uint32_t velocity)
+{
+    int wkc = ec_SDOwrite(slaveID, Index_MaxProfileVelocity, 0, FALSE, 4, &velocity, EC_TIMEOUTRXM);
+
+    if(wkc <= 0)
+        return FALSE;
+
+    return TRUE;    
+}
+
+bool L7NH::setSpeedLimitFunctionSelect(bool state)
+{
+    uint16_t data;
+    if(state == true)
+    {
+        data = 1;
+    }
+    else
+    {
+        data = 0;
+    }
+
+    int wkc = ec_SDOwrite(slaveID, Index_SpeedLimitFunctionSelect, 0, FALSE, 2, &data, EC_TIMEOUTRXM);
+
+    if(wkc <= 0)
+        return FALSE;
+
+    return TRUE;    
+}
+
+bool L7NH::setSpeedLimitValueAtTorqueControlMode(uint16_t value)
+{
+    int wkc = ec_SDOwrite(slaveID, Index_SpeedLimitValueAtTorqueControlMode, 0, FALSE, 2, &value, EC_TIMEOUTRXM);
+
+    if(wkc <= 0)
+        return FALSE;
+
+    return TRUE; 
+}
+
+int16_t L7NH::getFeedbackSpeedSDO(void)
+{
+    int wkc;
+    int size = 2;
+    int16_t data;
+    wkc = ec_SDOread(slaveID, Index_FeedbackSpeed, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
+
+    if(wkc <= 0)
+        return 0;
+
+    return data;    
+}
+
+int16_t L7NH::getFeedbackSpeedPDO(void)
+{
+    // Access the process data inputs for the specified slave
+    uint8 *inputs = ec_slave[slaveID].inputs;
+    
+    // Write the torque to the specified offset
+    int32_t data = *(int32_t *)(inputs + TxMapOffset_FeedbackSpeed);
+
+    return data;   
+}
+
+uint16_t L7NH::getMotorRatedSpeed(void)
+{
+    int wkc;
+    int size = 2;
+    uint16_t data;
+    wkc = ec_SDOread(slaveID, Index_MotorRatedSpeed, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
+
+    if(wkc <= 0)
+        return 0;
+
+    return data;    
 }
 
 bool L7NH::setProfileAccelerationSDO(int32_t acc)

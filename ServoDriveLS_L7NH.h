@@ -14,6 +14,8 @@ class L7NH
 {
 public:
     
+    std::string errorMessage;
+    
     struct MOTOR_STATE
     {
         int32_t posActRaw;                      // Raw Actual position. [pulses]
@@ -35,8 +37,12 @@ public:
     
     void statesClear(void);
     
-    // Set slave num/ID in ethercat slaves detected.
-    void setSlaveID(int ID_num);
+    /**
+     * Set slave num/ID in ethercat slaves detected.
+     * @return true if successed.  
+     * @return flase if there is a problem for ethercat slave connection.
+     *  */ 
+    bool setSlaveID(int ID_num);
 
     // +++++++++++++++++++++++++++++++++++++++++++++++++++++
     // Set/Get TX/RX PDO configurations:
@@ -307,6 +313,7 @@ public:
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // Set/Get Torque:
 
+    // Set the design rate torque value [N.m] for Servo motor. Its depend on manufacture designing.
     void setRatedTorque(double value);
 
     // Set Target Torque in SDO mode. [0.1%]
@@ -366,6 +373,37 @@ public:
     // return: true if successed.
     bool setTargetVelocitySDO(int32_t velocity);
 
+    // Set Max Profile Velocity in SDO mode. [pulses/s]
+    // return: true if successed.
+    bool setMaxProfileVelocitySDO(uint32_t velocity);
+
+    /**
+     * This specifies the speed limit function for torque control.
+     * @return true if successed.
+     */
+    bool setSpeedLimitFunctionSelect(bool state);
+
+    /**
+     * This specifies the speed limit value for torque control. This setting is applied only when the Speed Limit Function Setting (0x230D) is set to 0. 
+     * @return true if successed.
+     */
+    bool setSpeedLimitValueAtTorqueControlMode(uint16_t value);
+
+    /**
+     * This represents the current rotation speed of the motor. [rpm]
+     */
+    int16_t getFeedbackSpeedSDO(void);
+
+    /**
+     * This represents the current rotation speed of the motor. [rpm]
+     */
+    int16_t getFeedbackSpeedPDO(void);
+
+    /**
+     * This represents the rated speed of the driving motor. [RPM]
+     */
+    uint16_t getMotorRatedSpeed(void);
+    
     // +++++++++++++++++++++++++++++++++++++++++++++++++
     // Set/Get Acceleration:
 
@@ -402,6 +440,14 @@ public:
     // Get Position Actual Value in PDO mode. [pulses]
     // Hint: Use it when PositionActualValue exist in PDO mapping, otherwise return incorrect value.
     int32_t getPositionActualPDO(void);
+
+    // ++++++++++++++++++++++++++++++++++++++++++++++++
+    // Digital input/output:
+
+    /**
+     * Get DigitalInputs port value.
+     */
+    uint32_t getDigitalInputs(void);
 
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // Auto configuration options:
@@ -459,6 +505,7 @@ private:
     uint8_t TxMapOffset_PositionDemandInternal;
     uint8_t TxMapOffset_PositionDemand;
     uint8_t TxMapOffset_VelocityDemand;
+    uint8_t TxMapOffset_FeedbackSpeed;
     uint8_t TxMapOffset_TorqueDemand;
     uint8_t TxMapOffset_DigitalInput;
     uint8_t TxMapOffset_OperationModeDisplay;
