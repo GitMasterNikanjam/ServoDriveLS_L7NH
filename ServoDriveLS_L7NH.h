@@ -348,6 +348,36 @@ public:
     // This specifies the torque slope for the PT mode operation.
     bool setTorqueSlopeSDO(uint32_t slope);
 
+    /**
+     * This specifies the function to limit the output torque of the drive.   
+     *  
+     * | Setting values  |                                     Description                                      |
+     * |:---------------:|--------------------------------------------------------------------------------------|
+     * |                 | Limits the torque using positive/negative torque limit value according to the        |
+     * |        0        | driving direction; the maximum value is limited by the maximum torque                |
+     * |                 | (0x6072).                                                                            |
+     * |                 | Forward: 0x60E0, Reverse: 0x60E1                                                     |
+     * |-----------------|--------------------------------------------------------------------------------------|
+     * |        1        | Limits the torque only by the maximum torque (0x6072) regardless of the              |
+     * |                 | driving direction.                                                                   |
+     * |-----------------|--------------------------------------------------------------------------------------|
+     * |                 | Limits the torque using external positive/negative torque limit value                |
+     * |        2        | according to the driving direction.                                                  |
+     * |                 | - Forward: 0x2111, Reverse: 0x2112                                                   |
+     * |-----------------|--------------------------------------------------------------------------------------|
+     * |                 | Limits the torque using internal and external torque limit value according to        |
+     * |                 | the driving direction and the torque limit signal.                                   |
+     * |        3        | - Forward: 0x60E0(if P_CL signal is not input), 0x2111(if P_CL signal is             |
+     * |                 | input)                                                                               |
+     * |                 | - Reverse: 0x60E1(if N_CL signal is not input), 0x2112(if N_CL signal is             |
+     * |                 | input)                                                                               |
+     * |-----------------|--------------------------------------------------------------------------------------|
+     * |        4        | Limited by the analog input torque limit.                                            |
+     * |                 | - Refer to analog torque limit scale (0x221C) and offset (0x221D)                    |
+     * |-----------------|--------------------------------------------------------------------------------------|
+     */
+    bool setTorqueLimitFunctionSelectSDO(uint16_t value);
+
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // Set/Get Velocity:
 
@@ -385,6 +415,7 @@ public:
 
     /**
      * This specifies the speed limit value for torque control. This setting is applied only when the Speed Limit Function Setting (0x230D) is set to 0. 
+     * @param value: Max speed [RPM] at torque control mode.
      * @return true if successed.
      */
     bool setSpeedLimitValueAtTorqueControlMode(uint16_t value);

@@ -45,6 +45,7 @@ bool L7NH::setSlaveID(int ID_num)
         errorMessage = "Error L7NH: Motor drive can not detected.";
         return false;
     }
+
     PulsePerRevolution = getEncoderPulsePerRevolution();
 
     if(PulsePerRevolution == 0)
@@ -547,8 +548,7 @@ int16_t L7NH::getNodeID(void)
         errorMessage = "Error L7NH: There is a problem for ethercat connection.";
         std::cout << errorMessage << std::endl;
         return -1;
-    }
-        
+    } 
 
     return (int16_t)ID;
 }
@@ -588,7 +588,6 @@ uint32_t L7NH::getEncoderPulsePerRevolution(void)
     int wkc;
     int size = 4;
     uint32_t data;
-    printf("debug\n");
     wkc = ec_SDOread(slaveID, Index_EncoderPulsePerRevolution, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
     osal_usleep(1000);
 
@@ -996,6 +995,16 @@ bool L7NH::setMaximumTorqueSDO(uint16_t torque)
 bool L7NH::setTorqueSlopeSDO(uint32_t slope)
 {
     int wkc = ec_SDOwrite(slaveID, Index_TorqueSlope, 0, FALSE, 4, &slope, EC_TIMEOUTRXM);
+
+    if(wkc <= 0)
+        return FALSE;
+
+    return TRUE;
+}
+
+bool L7NH::setTorqueLimitFunctionSelectSDO(uint16_t value)
+{
+    int wkc = ec_SDOwrite(slaveID, Index_TorqueLimitFunctionSelect, 0, FALSE, 2, &value, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
         return FALSE;
