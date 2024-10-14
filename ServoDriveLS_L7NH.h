@@ -169,7 +169,7 @@ public:
 
     return: true if successed.
     */
-    bool setRotationDirectionSelect(uint8_t dir);
+    bool setRotationDirectionSelect(uint16_t dir);
 
     /* Get direction of rotation relative to the command value. 
     return value:

@@ -611,7 +611,7 @@ uint8_t L7NH::getRotationDirectionSelect(void)
     return dir;
 }
 
-bool L7NH::setRotationDirectionSelect(uint8_t dir)
+bool L7NH::setRotationDirectionSelect(uint16_t dir)
 {
     int wkc;
     wkc = ec_SDOwrite(slaveID, Index_RotationDirectionSelect, 0, FALSE, 2, &dir, EC_TIMEOUTRXM);
