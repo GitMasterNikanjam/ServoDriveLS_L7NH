@@ -72,6 +72,7 @@ namespace _L7NH
     #define MapValue_PositionDemandInternal             0x60FC0020
     #define MapValue_VelocityActual                     0x606C0020  
     #define MapValue_VelocityDemand                     0x606B0020
+    #define MapValue_FeedbackSpeed                      0x26000010
     #define MapValue_DigitalInput                       0x60FD0020 
     #define MapValue_OperationModeDisplay               0x60610008
 

@@ -282,6 +282,7 @@ bool L7NH::setTxPDO(uint8_t num_enteries, uint32_t* mapping_entry)
     _TxMapFlag[8] = 0;
     _TxMapFlag[9] = 0;
     _TxMapFlag[10] = 0;
+    _TxMapFlag[11] = 0;
 
     int wkc;
     uint16_t index;
@@ -328,26 +329,6 @@ bool L7NH::setTxPDO(uint8_t num_enteries, uint32_t* mapping_entry)
                 offset += 2;
                 _TxMapFlag[0] = 1;
             break;
-            case MapValue_DigitalInput:
-                TxMapOffset_DigitalInput = offset;
-                offset += 4;
-                _TxMapFlag[9] = 1;
-            break;
-            case MapValue_OperationModeDisplay:
-                TxMapOffset_OperationModeDisplay = offset;
-                offset += 1;
-                _TxMapFlag[10] = 1;
-            break;
-            case MapValue_TorqueActual:
-                TxMapOffset_TorqueActual = offset;
-                offset += 2;
-                _TxMapFlag[4] = 1;
-            break;
-            case MapValue_TorqueDemand:
-                TxMapOffset_TorqueDemand = offset;
-                offset += 2;
-                _TxMapFlag[8] = 1;
-            break;
             case MapValue_PositionActualInternal:
                 TxMapOffset_PositionActualInternal = offset;
                 offset += 4;
@@ -358,25 +339,50 @@ bool L7NH::setTxPDO(uint8_t num_enteries, uint32_t* mapping_entry)
                 offset += 4;
                 _TxMapFlag[2] = 1;
             break;
-            case MapValue_PositionDemand:
-                TxMapOffset_PositionDemand = offset;
+            case MapValue_VelocityActual:
+                TxMapOffset_VelocityActual = offset;
                 offset += 4;
-                _TxMapFlag[6] = 1;
+                _TxMapFlag[3] = 1;
+            break;
+            case MapValue_TorqueActual:
+                TxMapOffset_TorqueActual = offset;
+                offset += 2;
+                _TxMapFlag[4] = 1;
             break;
             case MapValue_PositionDemandInternal:
                 TxMapOffset_PositionDemandInternal = offset;
                 offset += 4;
                 _TxMapFlag[5] = 1;
             break;
-            case MapValue_VelocityActual:
-                TxMapOffset_VelocityActual = offset;
+            case MapValue_PositionDemand:
+                TxMapOffset_PositionDemand = offset;
                 offset += 4;
-                _TxMapFlag[3] = 1;
+                _TxMapFlag[6] = 1;
             break;
             case MapValue_VelocityDemand:
                 TxMapOffset_VelocityDemand = offset;
                 offset += 4;
                 _TxMapFlag[7] = 1;
+            break;
+            case MapValue_FeedbackSpeed:
+                TxMapOffset_FeedbackSpeed = offset;
+                offset += 2;
+                _TxMapFlag[8] = 1;
+            break;
+            case MapValue_TorqueDemand:
+                TxMapOffset_TorqueDemand = offset;
+                offset += 2;
+                _TxMapFlag[9] = 1;
+            break;
+            case MapValue_DigitalInput:
+                TxMapOffset_DigitalInput = offset;
+                offset += 4;
+                _TxMapFlag[10] = 1;
+            break;
+            case MapValue_OperationModeDisplay:
+                TxMapOffset_OperationModeDisplay = offset;
+                offset += 1;
+                _TxMapFlag[11] = 1;
             break;
             default:
                 return FALSE;
@@ -822,7 +828,7 @@ uint16 L7NH::getStatuseWordPDO(void)
 
 int8_t L7NH::getOperationModeDisplayPDO(void)
 {
-    if(_TxMapFlag[10] == 0)
+    if(_TxMapFlag[11] == 0)
         return 0;
 
     // Access the process data inputs for the specified slave
@@ -1323,6 +1329,9 @@ int16_t L7NH::getFeedbackSpeedSDO(void)
 
 int16_t L7NH::getFeedbackSpeedPDO(void)
 {
+    if(_TxMapFlag[8] == 0)
+    return false;
+
     // Access the process data inputs for the specified slave
     uint8 *inputs = ec_slave[slaveID].inputs;
     
@@ -1502,7 +1511,7 @@ bool L7NH::updateStatesPDO(void)
     }
 
     // Refresh states of all slaves state and read them.
-    ec_readstate();
+    // ec_readstate();
 
     states.ethMode = ec_slave[slaveID].state; 
 

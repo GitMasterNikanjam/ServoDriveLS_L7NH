@@ -551,11 +551,12 @@ private:
      5: PositionDemandInternal
      6: PositionDemand
      7: VelocityDemand
-     8: TorqueDemand
-     9: DigitalInput
-     10: OperationModeDisplay
+     8: FeedbackSpeed
+     9: TorqueDemand
+     10: DigitalInput
+     11: OperationModeDisplay
     */
-    uint8_t _TxMapFlag[11] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    uint8_t _TxMapFlag[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
     // State machine of motor driver
     enum stateMachine_enum
