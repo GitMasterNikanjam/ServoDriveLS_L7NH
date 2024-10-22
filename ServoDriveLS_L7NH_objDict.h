@@ -472,48 +472,48 @@ because the drive refers to the command argument at the moment of entering the c
 */
 /*
 Command code            Command argument    Run procedure
------------------------------------------------------------------------------
+
                         1                   Servo on
                         2                   Servo off
 Manual Jog              3                   Positive (+) driving (0x2300)
 (0x0001)                4                   Negative (-) driving (0x2300)
                         5                   Stop to zero speed
--------------------------------------------------------------------------------           
+
                         1                   Servo on
 Programmed Jog          2                   Servo off
 (0x0002)                3                   Operation start
                         4                   Stop to zero speed (server on maintained)
--------------------------------------------------------------------------------                  
+                  
 Servo Alarm History     1
 Initialization(0x0003)  
--------------------------------------------------------------------------------
+
 Off-line Auto Tuning    1                   Start auto tuning
 (0x0004)
--------------------------------------------------------------------------------                       
+                       
                         1                   Servo on
                         2                   Servo off
 Index Pulse Search      3                   Positive (+) search (0x230C)
 (0x0005)                4                   Negative (-) search (0x230C)
                         5                   Stop to zero speed
---------------------------------------------------------------------------------                  
+                  
 Absolute encoder reset  1                   Absolute encoder reset
 (0x0006)
---------------------------------------------------------------------------------                      
+                      
 Instantaneous Maximum
 Operation Overload      1                   Resets instantaneous maximum operation overload (0x2604) value
 Reset (0x0007)
---------------------------------------------------------------------------------                     
+                     
                                             Phase current offset tuning
 Phase current offset    1                   (The U-/V-/W-phase offsets are stored in 0x2015 -
 tuning                                      7, respectively. If the offset is abnormally large,
 (0x0008)                                    AL-15 will be generated.)
----------------------------------------------------------------------------------                                      
+                                      
 Software reset          1                   Software reset
 (0x0009)
----------------------------------------------------------------------------------                    
+                    
 Commutation             1                   Commutation is performed
 (0x000A)    
----------------------------------------------------------------------------------              
+              
 */
 #define Index_ProcedureCommandCode          0x2700
 #define Index_ProcedureCommandArgument      0x2701
