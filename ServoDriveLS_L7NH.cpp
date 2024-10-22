@@ -981,6 +981,256 @@ int32_t L7NH::getPositionDemandInternalSDO(void)
 }
 
 // ++++++++++++++++++++++++++++++++++++++++++++++++
+// Digital input/output:
+
+bool L7NH::setDigitalInput(uint8_t inputChannel, uint8_t assignedValue, uint8_t activeMode)
+{
+    uint16 index;
+
+    switch(inputChannel)
+    {
+        case 1:
+            index = Index_InputSignalSelection_1;
+        break;
+        case 2:
+            index = Index_InputSignalSelection_2;
+        break;
+        case 3:
+            index = Index_InputSignalSelection_3;
+        break;
+        case 4:
+            index = Index_InputSignalSelection_4;
+        break;
+        case 5:
+            index = Index_InputSignalSelection_5;
+        break;
+        case 6:
+            index = Index_InputSignalSelection_6;
+        break;
+        case 7:
+            index = Index_InputSignalSelection_7;
+        break;
+        case 8:
+            index = Index_InputSignalSelection_8;
+        break;
+        default:
+            return false;
+    }
+
+    if(assignedValue > 0x0C)
+    {
+        return false;
+    }
+
+    if(activeMode > 1)
+    {
+        return false;
+    }
+
+    uint16_t data = ((uint16_t)activeMode << 15) || ((uint16_t)assignedValue); 
+
+    int wkc = ec_SDOwrite(slaveID, index, 0, FALSE, 2, &data, EC_TIMEOUTRXM);
+
+    if(wkc <= 0)
+        return false;
+
+    return true;
+}
+
+uint8_t L7NH::getDigitalInputValueSDO(void)
+{
+    int wkc;
+    int size = 4;
+    uint32_t data;
+    wkc = ec_SDOread(slaveID, Index_DigitalInputs, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
+
+    if(wkc <=0)
+        return 0;
+
+    uint8_t value = (uint8_t)((data >> 16) && 0xFF);
+
+    return data;
+}
+
+uint8_t L7NH::getDigitalInputValuePDO(void)
+{
+    if(_TxMapFlag[10] == 0)
+        return 0;
+
+    // Access the process data inputs for the specified slave
+    uint8 *inputs = ec_slave[slaveID].inputs;
+    
+    // Read from the specified offset
+    uint32_t data = *(uint32_t *)(inputs + TxMapOffset_DigitalInput);
+
+    uint8_t value = (uint8_t)((data >> 16) && 0xFF);
+
+    return data;
+}
+
+int8_t L7NH::getDigitalInputAssignedValue(uint8_t inputChannel)
+{
+    uint16 index;
+
+    switch(inputChannel)
+    {
+        case 1:
+            index = Index_InputSignalSelection_1;
+        break;
+        case 2:
+            index = Index_InputSignalSelection_2;
+        break;
+        case 3:
+            index = Index_InputSignalSelection_3;
+        break;
+        case 4:
+            index = Index_InputSignalSelection_4;
+        break;
+        case 5:
+            index = Index_InputSignalSelection_5;
+        break;
+        case 6:
+            index = Index_InputSignalSelection_6;
+        break;
+        case 7:
+            index = Index_InputSignalSelection_7;
+        break;
+        case 8:
+            index = Index_InputSignalSelection_8;
+        break;
+        default:
+            return -1;
+    }
+
+    int wkc;
+    int size = 2;
+    uint16_t data;
+    wkc = ec_SDOread(slaveID, index, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
+
+    if(wkc <=0)
+        return -1;
+
+    uint8_t value = (data && 0XFF);
+
+    return value;
+}
+
+int8_t L7NH::getDigitalInputActiveMode(uint8_t inputChannel)
+{
+    uint16 index;
+
+    switch(inputChannel)
+    {
+        case 1:
+            index = Index_InputSignalSelection_1;
+        break;
+        case 2:
+            index = Index_InputSignalSelection_2;
+        break;
+        case 3:
+            index = Index_InputSignalSelection_3;
+        break;
+        case 4:
+            index = Index_InputSignalSelection_4;
+        break;
+        case 5:
+            index = Index_InputSignalSelection_5;
+        break;
+        case 6:
+            index = Index_InputSignalSelection_6;
+        break;
+        case 7:
+            index = Index_InputSignalSelection_7;
+        break;
+        case 8:
+            index = Index_InputSignalSelection_8;
+        break;
+        default:
+            return -1;
+    }
+
+    int wkc;
+    int size = 2;
+    uint16_t data;
+    wkc = ec_SDOread(slaveID, index, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
+
+    if(wkc <=0)
+        return -1;
+
+    uint8_t value = (data >> 15);
+
+    return value;
+}
+
+// ++++++++++++++++++++++++++++++++++++++++++++++++
+// Procedure Command Code & Procedure Command Argument:
+
+bool L7NH::setProcedureCommandCode(uint16_t value)
+{
+    int wkc = ec_SDOwrite(slaveID, Index_ProcedureCommandCode, 0, FALSE, 2, &value, EC_TIMEOUTRXM);
+
+    if(wkc <= 0)
+        return FALSE;
+
+    return TRUE;
+}
+
+bool L7NH::setProcedureCommandArgument(uint16_t value)
+{
+    int wkc = ec_SDOwrite(slaveID, Index_ProcedureCommandArgument, 0, FALSE, 2, &value, EC_TIMEOUTRXM);
+
+    if(wkc <= 0)
+        return FALSE;
+
+    return TRUE;
+}
+
+bool L7NH::ManualJOG_ServoOn(void)
+{
+    bool flag;
+    flag = setProcedureCommandCode(ProcedureCommandCode_ManualJOG);
+    flag = flag && setProcedureCommandArgument(1);
+
+    return flag;
+}
+
+bool L7NH::ManualJOG_ServoOff(void)
+{
+    bool flag;
+    flag = setProcedureCommandCode(ProcedureCommandCode_ManualJOG);
+    flag = flag && setProcedureCommandArgument(2);
+
+    return flag;
+}
+
+bool L7NH::ManualJOG_Positive(void)
+{
+    bool flag;
+    flag = setProcedureCommandCode(ProcedureCommandCode_ManualJOG);
+    flag = flag && setProcedureCommandArgument(3);
+
+    return flag;
+}
+
+bool L7NH::ManualJOG_Negative(void)
+{
+    bool flag;
+    flag = setProcedureCommandCode(ProcedureCommandCode_ManualJOG);
+    flag = flag && setProcedureCommandArgument(4);
+
+    return flag;
+}
+
+bool L7NH::ManualJOG_Stop(void)
+{
+    bool flag;
+    flag = setProcedureCommandCode(ProcedureCommandCode_ManualJOG);
+    flag = flag && setProcedureCommandArgument(5);
+
+    return flag;
+}
+
+// ++++++++++++++++++++++++++++++++++++++++++++++++
 // Set/Get Torque:
 
 void L7NH::setRatedTorque(double value)
@@ -1354,6 +1604,61 @@ uint16_t L7NH::getMotorRatedSpeed(void)
     return data;    
 }
 
+bool L7NH::setJogOperationSpeed(int16_t value)
+{
+    int wkc = ec_SDOwrite(slaveID, Index_JogOperationSpeed, 0, FALSE, 2, &value, EC_TIMEOUTRXM);
+
+    if(wkc <= 0)
+        return FALSE;  
+
+    return true;
+}
+
+bool L7NH::setSpeedCommandAccelerationTime(uint16_t value)
+{
+    int wkc = ec_SDOwrite(slaveID, Index_SpeedCommandAccelerationTime, 0, FALSE, 2, &value, EC_TIMEOUTRXM);
+
+    if(wkc <= 0)
+        return FALSE;  
+
+    return true;
+}
+
+bool L7NH::setSpeedCommandDecelerationTime(uint16_t value)
+{
+    int wkc = ec_SDOwrite(slaveID, Index_SpeedCommandDecelerationTime, 0, FALSE, 2, &value, EC_TIMEOUTRXM);
+
+    if(wkc <= 0)
+        return FALSE;  
+
+    return true;
+}
+
+bool L7NH::setSpeedCommandScurveTime(uint16_t value)
+{
+    int wkc = ec_SDOwrite(slaveID, Index_SpeedCommandScurveTime, 0, FALSE, 2, &value, EC_TIMEOUTRXM);
+
+    if(wkc <= 0)
+        return FALSE;  
+
+    return true;
+}
+
+bool L7NH::setServoLockFunctionSetting(uint16_t value)
+{
+    if(value > 1)
+    {
+        return false;
+    }
+
+    int wkc = ec_SDOwrite(slaveID, Index_ServoLockFunctionSetting, 0, FALSE, 2, &value, EC_TIMEOUTRXM);
+
+    if(wkc <= 0)
+        return FALSE;  
+
+    return true;
+}
+
 bool L7NH::setProfileAccelerationSDO(int32_t acc)
 {
     int wkc = ec_SDOwrite(slaveID, Index_ProfileAcceleration, 0, FALSE, 4, &acc, EC_TIMEOUTRXM);
@@ -1510,11 +1815,6 @@ bool L7NH::updateStatesPDO(void)
         states.run = false;
     }
 
-    // Refresh states of all slaves state and read them.
-    // ec_readstate();
-
-    states.ethMode = ec_slave[slaveID].state; 
-
     return true;
 }
 
@@ -1552,11 +1852,6 @@ bool L7NH::updateStatesSDO(void)
     {
         states.run = false;
     }
-
-    // Refresh states of all slaves state and read them.
-    // ec_readstate();
-
-    // states.ethMode = ec_slave[slaveID].state; 
 
     return true;
 }

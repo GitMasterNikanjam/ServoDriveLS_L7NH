@@ -435,6 +435,41 @@ public:
      */
     uint16_t getMotorRatedSpeed(void);
     
+    /**
+     * @brief Set JogOperationSpeed. 
+     * @param value is jog operation speed. [RPM].
+     * @return true if successed.
+     */
+    bool setJogOperationSpeed(int16_t value);
+
+    /**
+     * @brief Set SpeedCommandAccelerationTime. 
+     * @param value [ms]
+     * @return true if successed.
+     */
+    bool setSpeedCommandAccelerationTime(uint16_t value);
+
+    /**
+     * @brief Set SpeedCommandDecelerationTime. 
+     * @param value [ms]
+     * @return true if successed.
+     */
+    bool setSpeedCommandDecelerationTime(uint16_t value);
+
+    /**
+     * @brief Set JogOperationSpeed. 
+     * @param value [ms]
+     * @return true if successed.
+     */
+    bool setSpeedCommandScurveTime(uint16_t value);
+
+    /**
+     * @brief Set ServoLockFunction enable/ disable. 
+     * @param value 0 means Servo-lock function disabled. 1 means Servo-lock function enabled. 
+     * @return true if successed.
+     */
+    bool setServoLockFunctionSetting(uint16_t value);
+
     // +++++++++++++++++++++++++++++++++++++++++++++++++
     // Set/Get Acceleration:
 
@@ -476,9 +511,95 @@ public:
     // Digital input/output:
 
     /**
-     * Get DigitalInputs port value.
+     * @brief Set digital input setting for certain channel. 
+     * @param inputChannel is channel number of input IO. It can be at range 1 to 8.  
+     * @param assignedValue is input assigned function value. It can be at range of 0x00 to 0x0C.
+     * @param activeMode is input signal activation mode. 0 value means active high. 1 value means active low.  
+     * @return true if successed.
+     * @note You can use from The macros **AssignInputValue_** and **InputMode_** for **assignedValue** and **activeMode**   
+     * 
      */
-    uint32_t getDigitalInputs(void);
+    bool setDigitalInput(uint8_t inputChannel, uint8_t assignedValue, uint8_t activeMode);
+
+    /**
+     * @brief Read and get digital inputs values for all channels. In SDO mode. 
+     * @return 0 for each bit value means input signal is disactive.
+     * @return 1 for each bit value means input signal is active.  
+     * @note bit 0 is for channel 1, bit 1 is for channel 2, and so on for other channels.
+     */
+    uint8_t getDigitalInputValueSDO(void);
+
+    /**
+     * @brief Read and get digital inputs values for all channels. In PDO mode. 
+     * @return 0 for each bit value means input signal is disactive.
+     * @return 1 for each bit value means input signal is active.  
+     * @note bit 0 is for channel 1, bit 1 is for channel 2, and so on for other channels.
+     */
+    uint8_t getDigitalInputValuePDO(void);
+
+    /**
+     * @brief Read and get digital input assigned value for certain channel.
+     * @param inputChannel is channel number of input IO. It can be at range 1 to 8. 
+     * @return -1 if not successed to read.
+     */
+    int8_t getDigitalInputAssignedValue(uint8_t inputChannel);
+
+    /**
+     * @brief Read and get digital input active mode for certain channel.
+     * @param inputChannel is channel number of input IO. It can be at range 1 to 8. 
+     * @return 0 is active high mode.
+     * @return 1 is active low mode.
+     * @return -1 if not successed to read.
+     */
+    int8_t getDigitalInputActiveMode(uint8_t inputChannel);
+
+    // ++++++++++++++++++++++++++++++++++++++++++++++++
+    // Procedure Command Code & Procedure Command Argument:
+
+    /**
+     * @brief Set ProcedureCommandCode.
+     * @param value is procedure command code value.  
+     * @note You can use **ProcedureCommandCode_** macros for value parameter.
+     * @return true if successed.
+     */
+    bool setProcedureCommandCode(uint16_t value);
+
+    /**
+     * @brief Set ProcedureCommandArgument. 
+     * @param value is procedure command argument.
+     * @return true if successed.
+     */
+    bool setProcedureCommandArgument(uint16_t value);
+
+    /**
+     * Do procedure ManualJOG_ServoOn. 
+     * @return true if successed.
+     */
+    bool ManualJOG_ServoOn(void);
+
+    /**
+     * Do procedure ManualJOG_ServoOff. 
+     * @return true if successed.
+     */
+    bool ManualJOG_ServoOff(void);
+
+    /**
+     * Do procedure ManualJOG_Positive. 
+     * @return true if successed.
+     */
+    bool ManualJOG_Positive(void);
+
+    /**
+     * Do procedure ManualJOG_Negative. 
+     * @return true if successed.
+     */
+    bool ManualJOG_Negative(void);
+
+    /**
+     * Do procedure ManualJOG_Stop. 
+     * @return true if successed.
+     */
+    bool ManualJOG_Stop(void);
 
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // Auto configuration options:
@@ -490,8 +611,14 @@ public:
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // Auto update driver states:
 
+    /**
+     * @brief Update driver states in PDO mode.
+     */
     bool updateStatesPDO(void);
 
+    /**
+     * @brief Update driver states in SDO mode.
+     */
     bool updateStatesSDO(void);
 
 private:

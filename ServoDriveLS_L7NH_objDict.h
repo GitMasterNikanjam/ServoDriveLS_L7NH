@@ -76,6 +76,34 @@ namespace _L7NH
     #define MapValue_DigitalInput                       0x60FD0020 
     #define MapValue_OperationModeDisplay               0x60610008
 
+
+    #define AssignInputValue_NotAssigned                0X00
+    #define AssignInputValue_POT                        0X01
+    #define AssignInputValue_NOT                        0X02
+    #define AssignInputValue_HOME                       0X03
+    #define AssignInputValue_STOP                       0X04
+    #define AssignInputValue_PCON                       0X05
+    #define AssignInputValue_GAIN2                      0X06
+    #define AssignInputValue_PCL                        0X07
+    #define AssignInputValue_NCL                        0X08
+    #define AssignInputValue_PROBE1                     0X09
+    #define AssignInputValue_PROB2                      0X0A
+    #define AssignInputValue_EMG                        0X0B
+    #define AssignInputValue_ARST                       0X0C
+
+    #define InputMode_ActiveHigh                        0
+    #define InputMode_ActiveLow                         1
+
+    #define ProcedureCommandCode_ManualJOG                      0x01
+    #define ProcedureCommandCode_ProgramJOG                     0x02
+    #define ProcedureCommandCode_AlarmHistoryReset              0x03
+    #define ProcedureCommandCode_OffLineAutoTuning              0x04
+    #define ProcedureCommandCode_IndexPulseSearch               0x05
+    #define ProcedureCommandCode_AbsoluteEncoderReset           0x06
+    #define ProcedureCommandCode_MaxLoadTorqueClear             0x07
+    #define ProcedureCommandCode_CalibratePhaseCurrentOffset    0x08
+    #define ProcedureCommandCode_SoftwareReset                  0x09
+    #define ProcedureCommandCode_Commutation                    0x0A
 }
 
 // ################################################################
@@ -305,6 +333,30 @@ Setting values          Assigned signal
 #define Index_DigitalOutputSignalSelection_4                0x2213
 
 /*
+This specifies the jog operation speed.
+*/
+#define Index_JogOperationSpeed                             0x2300
+
+/*
+Specifies the time required, in ms, for the motor to reach the rated motor speed from zero
+speed. [ms]
+*/
+#define Index_SpeedCommandAccelerationTime                  0x2301
+
+/*
+This specifies the time, in ms, required for the motor to decelerate from the rated motor
+speed to the stop. [ms]
+*/
+#define Index_SpeedCommandDecelerationTime                  0x2302
+
+/*
+You can configure the speed command in an S-curve pattern for smooth
+acceleration/deceleration. If it is set to 0, the drive will be operated in a trapezoidal pattern by
+default. [ms]
+*/
+#define Index_SpeedCommandScurveTime                        0x2303
+
+/*
 Speed Limit Function Select
 This specifies the speed limit function for torque control.
 Setting values      Setting details
@@ -319,6 +371,16 @@ This specifies the speed limit value for torque control. This setting is applied
 Function Setting (0x230D) is set to 0.
 */
 #define Index_SpeedLimitValueAtTorqueControlMode            0x230E
+
+/*
+This specifies the servo-lock function to fix the motor position with a position value when the
+speed command is input as 0 for speed control.
+
+Setting values Setting details:
+0 Servo-lock function disabled
+1 Servo-lock function enabled
+*/
+#define Index_ServoLockFunctionSetting                      0x2311
 
 /*
 User Drive Name
