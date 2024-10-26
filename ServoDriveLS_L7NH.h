@@ -1,5 +1,5 @@
-#ifndef _L7NH_H
-#define _L7NH_H
+#ifndef L7NH_H
+#define L7NH_H
 
 // Header Includes:
 #include <iostream>                 // standard I/O operations
@@ -16,7 +16,67 @@ public:
     
     std::string errorMessage;
     
-    struct MOTOR_STATE
+    struct ParameterStructure
+    {
+        /**
+         * @brief Speed measurements unit. 
+         * 
+         * Configure the speed calculation which affects the speed value of the encoder
+         * @note
+         * Config value Range:
+         * 
+         * 0x00: steps/1000 ms
+         * 
+         * 0x01: steps/100 ms
+         * 
+         * 0x02: steps/10 ms
+         * 
+         * 0x03: revolutions per Minute (rpm)
+         */
+        uint8_t SPD_UNIT;
+
+        /**
+         * @brief Encoder scaled gain value for scaled position output calcultation.  
+         * @note
+         * - Scaled_position = GEAR_RATIO * NonScaled_position    
+         * 
+         * - If GEAR_RATIO be zero value, it means the gear factor functionality is inactive.
+         */
+        float GEAR_RATIO;
+
+        /**
+         * @brief Ethercat slave id number. 
+         * @note 
+         * - The default value is -1, it means not assigned any id.  
+         * 
+         * - The value more than 0 is acceptable. 
+         */
+        int ETHERCAT_ID;
+
+        /**
+         * @brief TXPDO/RXPDO map configuration type.
+         *  
+         * @note #### Vlaue:1
+         * 
+         * - RXPDO = {MapValue_ControlWord, MapValue_TargetTorque}
+         * 
+         * - TXPDO = {MapValue_StatusWord, MapValue_PositionActual, MapValue_VelocityActual, MapValue_OperationModeDisplay, MapValue_DigitalInput}
+         * 
+         * @note #### Other values  
+         * 
+         * - Not acceptabled. 
+         */
+        uint8_t PDOMAP_CONFIG_TYPE;
+
+        /**
+         * @brief Direction behavior. 0: CW, 1:CCW     
+         * @note - If dir be 0 the position value increases if the shaft is rotated clockwise (looking at the shaft). 
+         * @note - If dir be 1 the position value increases if the shaft is rotated counterclockwise (looking at the shaft).  
+         */
+        uint8_t ROTATION_DIR;
+    }parameters;
+
+    struct ValueStructure
     {
         int32_t posActRaw;                      // Raw Actual position. [pulses]
         int32_t velActRaw;                      // Raw Actual  velocity. [pulses/sec]
@@ -31,18 +91,24 @@ public:
         uint8_t ctlmode = OPERATION_MODE_NO;    // Control mode: NO/PP/PV/PT/HM/CSP/CSV/CST
         uint8_t run = 0;                        // 1/0 -> On/Off state of driver.
         uint16_t statusword;                    // Statusword register value.
-    }states;
+    }value;
 
     uint32_t PulsePerRevolution;
     
-    void statesClear(void);
-    
+    /// @brief  Default constructor. Init parameters and values.
+    L7NH();
+
     /**
-     * Set slave num/ID in ethercat slaves detected.
-     * @return true if successed.  
-     * @return flase if there is a problem for ethercat slave connection.
-     *  */ 
-    bool setSlaveID(int ID_num);
+     * @brief Init object. Check parameters. Set and config parameters.
+     * @return true if successed.
+     */
+    bool init(void);
+
+    /**
+     * @brief Check parameters validation.
+     * @return true if successed.
+     */
+    bool checkParameters(void);
 
     // +++++++++++++++++++++++++++++++++++++++++++++++++++++
     // Set/Get TX/RX PDO configurations:
@@ -234,6 +300,12 @@ public:
     // retutn: true if successed.
     bool loadParamsSpecific(void);
 
+    /**
+     * @brief Reset software reset of driver by procedure commands.
+     * @return true if successed.
+     */
+    bool softwareReset(void);
+
     // +++++++++++++++++++++++++++++++++++++++++++++++++++++
     // Servo ON/OFF:
 
@@ -250,11 +322,13 @@ public:
 
     // Servo Off command.
     // Driver must be in ethercat operational state.
-    void servoOffSDO(void);
+    bool servoOffSDO(void);
 
     // Servo Off command.   
     // Driver must be in ethercat operational state.
-    void servoOffPDO(void);
+    bool servoOffPDO(void);
+
+    bool isServoON(void);
 
     // +++++++++++++++++++++++++++++++++++++++++++++++++++++
     // Controlword, statusword, Operation mode and machin state
@@ -409,6 +483,7 @@ public:
 
     /**
      * This specifies the speed limit function for torque control.
+     * @param state 0 Limited by speed limit value (0x230E). 1 Limited by the maximum motor speed.  
      * @return true if successed.
      */
     bool setSpeedLimitFunctionSelect(bool state);
@@ -602,29 +677,19 @@ public:
     bool ManualJOG_Stop(void);
 
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    // Auto configuration options:
-
-    // Automatic init and setup of driver. 
-    // setup_num=1 : assigne 1st rank. set CST mode. RXPDO: {ControlWord, TargetTorque}. TXPDO: {StatusWord, PositionActual, VelocityActual, OperationModeDisplay, DigitalInput}
-    bool autoSetup(int ID, int setup_num);
-
-    // ++++++++++++++++++++++++++++++++++++++++++++++++
     // Auto update driver states:
 
     /**
-     * @brief Update driver states in PDO mode.
+     * @brief Update driver values in PDO mode.
      */
-    bool updateStatesPDO(void);
+    bool updateValuesPDO(void);
 
     /**
-     * @brief Update driver states in SDO mode.
+     * @brief Update driver values in SDO mode.
      */
-    bool updateStatesSDO(void);
+    bool updateValuesSDO(void);
 
 private:
-
-    // ID for salve number that used in simple_ethercat library.
-    int slaveID;
 
     // Access the process data inputs.
     uint8 *inputs;

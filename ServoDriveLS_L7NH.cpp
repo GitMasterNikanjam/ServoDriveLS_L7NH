@@ -20,27 +20,32 @@ namespace _L7NH
 
 using namespace _L7NH;
 
-void L7NH::statesClear(void)
+L7NH::L7NH()
 {
-    states.run = 0;
-    states.ctlmode = OPERATION_MODE_NO;
-    states.ethMode = EC_STATE_ERROR;
-    states.posAct = 0 ;
-    states.posActRaw = 0;
-    states.statusword = 0;
-    states.trqAct = 0;
-    states.trqActRaw = 0;
-    states.trqActRaw_cmd = 0;
-    states.velAct = 0;
-    states.velActRaw = 0;
-    states.velActRaw_cmd = 0;
+    parameters.ETHERCAT_ID = -1;
+
+    value.run = 0;
+    value.ctlmode = OPERATION_MODE_NO;
+    value.ethMode = EC_STATE_ERROR;
+    value.posAct = 0 ;
+    value.posActRaw = 0;
+    value.statusword = 0;
+    value.trqAct = 0;
+    value.trqActRaw = 0;
+    value.trqActRaw_cmd = 0;
+    value.velAct = 0;
+    value.velActRaw = 0;
+    value.velActRaw_cmd = 0;
 }
 
-bool L7NH::setSlaveID(int ID_num)
+bool L7NH::init(void)
 {
-    slaveID = ID_num;
+    if(!checkParameters())
+    {
+        return false;
+    }
 
-    if(std::string(ec_slave[ID_num].name) == "")
+    if(std::string(ec_slave[parameters.ETHERCAT_ID].name) == "")
     {
         errorMessage = "Error L7NH: Motor drive can not detected.";
         return false;
@@ -54,6 +59,43 @@ bool L7NH::setSlaveID(int ID_num)
         return false;
     }
 
+    if(setModesOfOperationSDO(OPERATION_MODE_CST) == FALSE)
+    {
+        return FALSE;
+    }
+    
+    assignRxPDO_rank(1);
+    assignTxPDO_rank(1);
+
+    switch(parameters.PDOMAP_CONFIG_TYPE)
+    {
+        case 1:
+            uint32_t map_rx[2] = {MapValue_ControlWord, MapValue_TargetTorque};
+            uint32_t map_tx[5] = {MapValue_StatusWord, MapValue_PositionActual, MapValue_VelocityActual, MapValue_OperationModeDisplay, MapValue_DigitalInput};
+                
+            if(setRxPDO(sizeof(map_rx)/4, map_rx) == false)
+                return FALSE;
+
+            if(setTxPDO(sizeof(map_tx)/4, map_tx) == false)
+                return false;
+        break;
+        default:
+            return false;
+    }
+
+    PulsePerRevolution = getEncoderPulsePerRevolution();
+
+    if(PulsePerRevolution == 0)
+    {
+        return false;
+    }
+        
+    return true;
+}
+
+bool L7NH::checkParameters(void)
+{
+
     return true;
 }
 
@@ -65,7 +107,7 @@ bool L7NH::assignRxPDO_rank(int pdo_rank)
     // Read state of all slaves in ethercat.
     ec_readstate();
 
-    if(ec_slave[slaveID].state != EC_STATE_PRE_OP)
+    if(ec_slave[parameters.ETHERCAT_ID].state != EC_STATE_PRE_OP)
         return FALSE;
 
     int wkc;                // Working counter     
@@ -91,14 +133,14 @@ bool L7NH::assignRxPDO_rank(int pdo_rank)
     }
     // Set subindex 0 to 0 for syncManagerAssignedRxPDO
     data = 0;
-    ec_SDOwrite(slaveID, Index_syncManagerAssignedRxPDO, 0, FALSE, 1, &data, EC_TIMEOUTRXM);
+    ec_SDOwrite(parameters.ETHERCAT_ID, Index_syncManagerAssignedRxPDO, 0, FALSE, 1, &data, EC_TIMEOUTRXM);
 
     // Assign RxPDO index.
-    wkc = ec_SDOwrite(slaveID, Index_syncManagerAssignedRxPDO, 1, FALSE, 2, &index, EC_TIMEOUTRXM);
+    wkc = ec_SDOwrite(parameters.ETHERCAT_ID, Index_syncManagerAssignedRxPDO, 1, FALSE, 2, &index, EC_TIMEOUTRXM);
 
     // Set subindex 0 to 1 for syncManagerAssignedRxPDO
     data = 1;
-    ec_SDOwrite(slaveID, Index_syncManagerAssignedRxPDO, 0, FALSE, 1, &data, EC_TIMEOUTRXM);
+    ec_SDOwrite(parameters.ETHERCAT_ID, Index_syncManagerAssignedRxPDO, 0, FALSE, 1, &data, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
     {
@@ -114,7 +156,7 @@ bool L7NH::assignTxPDO_rank(int pdo_rank)
     // Read state of all slaves in ethercat.
     ec_readstate();
 
-    if(ec_slave[slaveID].state != EC_STATE_PRE_OP)
+    if(ec_slave[parameters.ETHERCAT_ID].state != EC_STATE_PRE_OP)
         return FALSE;
 
     int wkc;                // Working counter     
@@ -140,14 +182,14 @@ bool L7NH::assignTxPDO_rank(int pdo_rank)
     }
     // Set subindex 0 to 0 for syncManagerAssignedRxPDO
     data = 0;
-    ec_SDOwrite(slaveID, Index_syncManagerAssignedTxPDO, 0, FALSE, 1, &data, EC_TIMEOUTRXM);
+    ec_SDOwrite(parameters.ETHERCAT_ID, Index_syncManagerAssignedTxPDO, 0, FALSE, 1, &data, EC_TIMEOUTRXM);
 
     // Assign RxPDO index.
-    wkc = ec_SDOwrite(slaveID, Index_syncManagerAssignedTxPDO, 1, FALSE, 2, &index, EC_TIMEOUTRXM);
+    wkc = ec_SDOwrite(parameters.ETHERCAT_ID, Index_syncManagerAssignedTxPDO, 1, FALSE, 2, &index, EC_TIMEOUTRXM);
 
     // Set subindex 0 to 1 for syncManagerAssignedRxPDO
     data = 1;
-    ec_SDOwrite(slaveID, Index_syncManagerAssignedTxPDO, 0, FALSE, 1, &data, EC_TIMEOUTRXM);
+    ec_SDOwrite(parameters.ETHERCAT_ID, Index_syncManagerAssignedTxPDO, 0, FALSE, 1, &data, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
     {
@@ -163,7 +205,7 @@ uint16_t L7NH::getRxPDO_rank(void)
     int wkc;           
     int size = 2;
     uint16_t data;
-    wkc = ec_SDOread(slaveID, Index_syncManagerAssignedRxPDO, 1, FALSE, &size, &data, EC_TIMEOUTRXM);
+    wkc = ec_SDOread(parameters.ETHERCAT_ID, Index_syncManagerAssignedRxPDO, 1, FALSE, &size, &data, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
         return 0;
@@ -176,7 +218,7 @@ uint16_t L7NH::getTxPDO_rank(void)
     int wkc;
     int size = 2;
     uint16_t data;
-    wkc = ec_SDOread(slaveID, Index_syncManagerAssignedTxPDO, 1, FALSE, &size, &data, EC_TIMEOUTRXM);
+    wkc = ec_SDOread(parameters.ETHERCAT_ID, Index_syncManagerAssignedTxPDO, 1, FALSE, &size, &data, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
         return 0;
@@ -214,7 +256,7 @@ bool L7NH::setRxPDO(uint8_t num_enteries, uint32_t* mapping_entry)
             return FALSE;
     }
 
-    wkc = ec_SDOwrite(slaveID, index, 0, FALSE, 1, &num_enteries, EC_TIMEOUTRXM);
+    wkc = ec_SDOwrite(parameters.ETHERCAT_ID, index, 0, FALSE, 1, &num_enteries, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
         return FALSE;
@@ -223,7 +265,7 @@ bool L7NH::setRxPDO(uint8_t num_enteries, uint32_t* mapping_entry)
 
     for(int subindex=1; subindex <= num_enteries; subindex++)
     {
-        wkc = ec_SDOwrite(slaveID, index, subindex, FALSE, 4, &mapping_entry[subindex - 1], EC_TIMEOUTRXM);
+        wkc = ec_SDOwrite(parameters.ETHERCAT_ID, index, subindex, FALSE, 4, &mapping_entry[subindex - 1], EC_TIMEOUTRXM);
         osal_usleep(10000);     // delay 10ms
 
         if(wkc <= 0)
@@ -305,7 +347,7 @@ bool L7NH::setTxPDO(uint8_t num_enteries, uint32_t* mapping_entry)
             return FALSE;
     }
 
-    wkc = ec_SDOwrite(slaveID, index, 0, FALSE, 1, &num_enteries, EC_TIMEOUTRXM);
+    wkc = ec_SDOwrite(parameters.ETHERCAT_ID, index, 0, FALSE, 1, &num_enteries, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
         return FALSE;
@@ -314,7 +356,7 @@ bool L7NH::setTxPDO(uint8_t num_enteries, uint32_t* mapping_entry)
 
     for(int subindex=1; subindex <= num_enteries; subindex++)
     {
-        wkc = ec_SDOwrite(slaveID, index, subindex, FALSE, 4, &mapping_entry[subindex - 1], EC_TIMEOUTRXM);
+        wkc = ec_SDOwrite(parameters.ETHERCAT_ID, index, subindex, FALSE, 4, &mapping_entry[subindex - 1], EC_TIMEOUTRXM);
         osal_usleep(10000);   // delay 10ms
 
         if(wkc <= 0)
@@ -399,7 +441,7 @@ bool L7NH::saveParamsAll(void)
 {
     int wkc;
     uint32_t data = SAVE;
-    wkc = ec_SDOwrite(slaveID, Index_StoreParameters, SubIndex_StoreParametersAll, FALSE, 4, &data, EC_TIMEOUTRXM);
+    wkc = ec_SDOwrite(parameters.ETHERCAT_ID, Index_StoreParameters, SubIndex_StoreParametersAll, FALSE, 4, &data, EC_TIMEOUTRXM);
     
     osal_usleep(1500000);
     
@@ -413,7 +455,7 @@ bool L7NH::saveParamsCommunication(void)
 {
     int wkc;
     uint32_t data = SAVE;
-    wkc = ec_SDOwrite(slaveID, Index_StoreParameters, SubIndex_StoreParametersCommunication, FALSE, 4, &data, EC_TIMEOUTRXM);
+    wkc = ec_SDOwrite(parameters.ETHERCAT_ID, Index_StoreParameters, SubIndex_StoreParametersCommunication, FALSE, 4, &data, EC_TIMEOUTRXM);
     
     osal_usleep(1500000);
 
@@ -428,7 +470,7 @@ bool L7NH::saveParamsCiA402(void)
 {
     int wkc;
     uint32_t data = SAVE;
-    wkc = ec_SDOwrite(slaveID, Index_StoreParameters, SubIndex_StoreParametersCiA402, FALSE, 4, &data, EC_TIMEOUTRXM);
+    wkc = ec_SDOwrite(parameters.ETHERCAT_ID, Index_StoreParameters, SubIndex_StoreParametersCiA402, FALSE, 4, &data, EC_TIMEOUTRXM);
     
     osal_usleep(1500000);
 
@@ -442,7 +484,7 @@ bool L7NH::saveParamsSpecific(void)
 {
     int wkc;
     uint32_t data = SAVE;
-    wkc = ec_SDOwrite(slaveID, Index_StoreParameters, SubIndex_StoreParametersSpecific, FALSE, 4, &data, EC_TIMEOUTRXM);
+    wkc = ec_SDOwrite(parameters.ETHERCAT_ID, Index_StoreParameters, SubIndex_StoreParametersSpecific, FALSE, 4, &data, EC_TIMEOUTRXM);
     
     osal_usleep(1500000);
 
@@ -456,7 +498,7 @@ bool L7NH::loadParamsAll(void)
 {
     int wkc;
     uint32_t data = LOAD;
-    wkc = ec_SDOwrite(slaveID, Index_RestoreDefaultParameters, SubIndex_RestoreDefaultParametersAll, FALSE, 4, &data, EC_TIMEOUTRXM);
+    wkc = ec_SDOwrite(parameters.ETHERCAT_ID, Index_RestoreDefaultParameters, SubIndex_RestoreDefaultParametersAll, FALSE, 4, &data, EC_TIMEOUTRXM);
     
     osal_usleep(1500000);
 
@@ -470,7 +512,7 @@ bool L7NH::loadParamsAll(void)
  {
     int wkc;
     uint32_t data = LOAD;
-    wkc = ec_SDOwrite(slaveID, Index_RestoreDefaultParameters, SubIndex_RestoreDefaultParametersCommunication, FALSE, 4, &data, EC_TIMEOUTRXM);
+    wkc = ec_SDOwrite(parameters.ETHERCAT_ID, Index_RestoreDefaultParameters, SubIndex_RestoreDefaultParametersCommunication, FALSE, 4, &data, EC_TIMEOUTRXM);
     
     osal_usleep(1500000);   
 
@@ -484,7 +526,7 @@ bool L7NH::loadParamsCiA402(void)
 {
     int wkc;
     uint32_t data = LOAD;
-    wkc = ec_SDOwrite(slaveID, Index_RestoreDefaultParameters, SubIndex_RestoreDefaultParametersCiA402, FALSE, 4, &data, EC_TIMEOUTRXM);
+    wkc = ec_SDOwrite(parameters.ETHERCAT_ID, Index_RestoreDefaultParameters, SubIndex_RestoreDefaultParametersCiA402, FALSE, 4, &data, EC_TIMEOUTRXM);
     
     osal_usleep(1500000);
 
@@ -498,7 +540,7 @@ bool L7NH::loadParamsSpecific(void)
 {
     int wkc;
     uint32_t data = LOAD;
-    wkc = ec_SDOwrite(slaveID, Index_RestoreDefaultParameters, SubIndex_RestoreDefaultParametersSpecific, FALSE, 4, &data, EC_TIMEOUTRXM);
+    wkc = ec_SDOwrite(parameters.ETHERCAT_ID, Index_RestoreDefaultParameters, SubIndex_RestoreDefaultParametersSpecific, FALSE, 4, &data, EC_TIMEOUTRXM);
     
     osal_usleep(1500000);
 
@@ -508,6 +550,19 @@ bool L7NH::loadParamsSpecific(void)
     return TRUE;
 }
     
+bool L7NH::softwareReset(void)
+{
+    ManualJOG_ServoOff();
+    for(int i =1; i<=2; i++)
+    {
+        setProcedureCommandCode(ProcedureCommandCode_SoftwareReset);
+        setProcedureCommandArgument(1);
+        osal_usleep(100000);
+    }
+
+    return true;
+}
+
 // +++++++++++++++++++++++++++++++++++++++++++++++++++++
 // Set/Get Driver ID:
 
@@ -515,7 +570,7 @@ bool L7NH::setMotorID(uint16_t ID)
 {
     int wkc;
 
-    wkc = ec_SDOwrite(slaveID, Index_MotorID, 0, FALSE, 2, &ID, EC_TIMEOUTRXM);
+    wkc = ec_SDOwrite(parameters.ETHERCAT_ID, Index_MotorID, 0, FALSE, 2, &ID, EC_TIMEOUTRXM);
     osal_usleep(1000);
 
     if(wkc <= 0)
@@ -529,7 +584,7 @@ int16_t L7NH::getMotorID(void)
     int wkc;
     int size = 2;
     uint16_t ID;
-    wkc = ec_SDOread(slaveID, Index_MotorID, 0, FALSE, &size, &ID, EC_TIMEOUTRXM);
+    wkc = ec_SDOread(parameters.ETHERCAT_ID, Index_MotorID, 0, FALSE, &size, &ID, EC_TIMEOUTRXM);
     osal_usleep(1000);
 
     if(wkc <= 0)
@@ -546,7 +601,7 @@ int16_t L7NH::getNodeID(void)
     int wkc;
     int size = 2;
     uint16_t ID;
-    wkc = ec_SDOread(slaveID, Index_NodeID, 0, FALSE, &size, &ID, EC_TIMEOUTRXM);
+    wkc = ec_SDOread(parameters.ETHERCAT_ID, Index_NodeID, 0, FALSE, &size, &ID, EC_TIMEOUTRXM);
     osal_usleep(1000);
 
     if(wkc <= 0)
@@ -566,7 +621,7 @@ bool L7NH::setEncoderType(uint16_t type)
 {
     int wkc;
     
-    wkc = ec_SDOwrite(slaveID, Index_EncoderType, 0, FALSE, 2, &type, EC_TIMEOUTRXM);
+    wkc = ec_SDOwrite(parameters.ETHERCAT_ID, Index_EncoderType, 0, FALSE, 2, &type, EC_TIMEOUTRXM);
     osal_usleep(1000);
 
     if(wkc <= 0)
@@ -580,7 +635,7 @@ int16_t L7NH::getEncoderType(void)
     int wkc;
     int size = 2;
     uint16_t type;
-    wkc = ec_SDOread(slaveID, Index_EncoderType, 0, FALSE, &size, &type, EC_TIMEOUTRXM);
+    wkc = ec_SDOread(parameters.ETHERCAT_ID, Index_EncoderType, 0, FALSE, &size, &type, EC_TIMEOUTRXM);
     osal_usleep(1000);
 
     if(wkc <= 0)
@@ -594,7 +649,7 @@ uint32_t L7NH::getEncoderPulsePerRevolution(void)
     int wkc;
     int size = 4;
     uint32_t data;
-    wkc = ec_SDOread(slaveID, Index_EncoderPulsePerRevolution, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
+    wkc = ec_SDOread(parameters.ETHERCAT_ID, Index_EncoderPulsePerRevolution, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
     osal_usleep(1000);
 
     if(wkc <= 0)
@@ -608,7 +663,7 @@ uint8_t L7NH::getRotationDirectionSelect(void)
     int wkc;
     int size = 1;
     uint8_t dir;
-    wkc = ec_SDOread(slaveID, Index_RotationDirectionSelect, 0, FALSE, &size, &dir, EC_TIMEOUTRXM);
+    wkc = ec_SDOread(parameters.ETHERCAT_ID, Index_RotationDirectionSelect, 0, FALSE, &size, &dir, EC_TIMEOUTRXM);
     osal_usleep(1000);
 
     if(wkc <= 0)
@@ -620,7 +675,7 @@ uint8_t L7NH::getRotationDirectionSelect(void)
 bool L7NH::setRotationDirectionSelect(uint16_t dir)
 {
     int wkc;
-    wkc = ec_SDOwrite(slaveID, Index_RotationDirectionSelect, 0, FALSE, 2, &dir, EC_TIMEOUTRXM);
+    wkc = ec_SDOwrite(parameters.ETHERCAT_ID, Index_RotationDirectionSelect, 0, FALSE, 2, &dir, EC_TIMEOUTRXM);
     osal_usleep(1000);
 
     if(wkc <= 0)
@@ -634,7 +689,7 @@ uint16_t L7NH::getEncoderConfiguration(void)
     int wkc;
     int size = 2;
     uint16_t data;
-    wkc = ec_SDOread(slaveID, Index_EncoderConfiguration, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
+    wkc = ec_SDOread(parameters.ETHERCAT_ID, Index_EncoderConfiguration, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
     osal_usleep(1000);
 
     if(wkc <= 0)
@@ -646,7 +701,7 @@ uint16_t L7NH::getEncoderConfiguration(void)
 bool L7NH::setEncoderConfiguration(uint16_t config)
 {
     int wkc;
-    wkc = ec_SDOwrite(slaveID, Index_EncoderConfiguration, 0, FALSE, 2, &config, EC_TIMEOUTRXM);
+    wkc = ec_SDOwrite(parameters.ETHERCAT_ID, Index_EncoderConfiguration, 0, FALSE, 2, &config, EC_TIMEOUTRXM);
     osal_usleep(1000);
 
     if(wkc <= 0)
@@ -672,6 +727,12 @@ void L7NH::servoOnSDO(void)
 
 void L7NH::servoOnPDO(void)
 {
+    // Check OPERATIONAL state
+    if (ec_slave[parameters.ETHERCAT_ID].state != EC_STATE_OPERATIONAL) 
+    {
+        return;
+    }
+
     setControlWordPDO(0x0006);
     ec_send_processdata();
     ec_receive_processdata(EC_TIMEOUTRET);
@@ -688,26 +749,84 @@ void L7NH::servoOnPDO(void)
     osal_usleep(10000);
 }
 
-void L7NH::servoOffSDO(void)
+bool L7NH::servoOffSDO(void)
 {
-    setControlWordSDO(0x0006);
+    if(!setControlWordSDO(0x0006))
+    {
+        return false;
+    }
+    ec_readstate();
     osal_usleep(10000);
 
-    setControlWordSDO(0x0000);
+    if(!setControlWordSDO(0x0000))
+    {
+        return false;
+    }
+    ec_readstate();
     osal_usleep(10000);
+
+    return true;
 }
 
-void L7NH::servoOffPDO(void)
+bool L7NH::servoOffPDO(void)
 {
-    setControlWordPDO(0x0006);
-    ec_send_processdata();
-    ec_receive_processdata(EC_TIMEOUTRET);
-    osal_usleep(10000);
+    // Check OPERATIONAL state
+    if (ec_slave[parameters.ETHERCAT_ID].state != EC_STATE_OPERATIONAL) 
+    {
+        return false;
+    }
 
-    setControlWordPDO(0x0000);
-    ec_send_processdata();
-    ec_receive_processdata(EC_TIMEOUTRET);
-    osal_usleep(10000);
+    // Send "Ready to Switch Off" command
+    if (setControlWordPDO(0x0006)) 
+    {
+        ec_send_processdata();
+        ec_receive_processdata(EC_TIMEOUTRET);
+        osal_usleep(10000); // Sleep for 10ms
+    } 
+    else 
+    {
+        printf("Failed to set control word for Ready to Switch Off\n");
+        return false;
+    }
+
+    // Send "Switch Off" command
+    if (setControlWordPDO(0x0000)) 
+    {
+        ec_send_processdata();
+        ec_receive_processdata(EC_TIMEOUTRET);
+        osal_usleep(10000); // Sleep for 10ms
+    } 
+    else 
+    {
+        printf("Failed to set control word for Switch Off\n");
+        return false;
+    }
+
+    return true;
+}
+
+bool L7NH::isServoON(void)
+{
+    uint16_t statusWord;
+    int size = sizeof(statusWord);
+
+    // Replace `slave_index` with the index of your servo drive.
+    if (ec_SDOread(parameters.ETHERCAT_ID, 0x6041, 0x00, FALSE, &size, &statusWord, EC_TIMEOUTRXM) > 0) {
+        // Check if the "Operation Enabled" bit (Bit 2) is set
+        bool servoOn = (statusWord & 0x04) != 0;
+        if (servoOn) 
+        {
+            printf("Servo is ON.\n");
+        } else {
+            printf("Servo is OFF.\n");
+            return false;
+        }
+    } else {
+        printf("Failed to read Status Word via SDO.\n");
+        return false;
+    }
+
+    return true;
 }
 
 // +++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -752,7 +871,7 @@ void L7NH::printStateMachine(void)
 bool L7NH::setModesOfOperationSDO(int8_t mode)
 {
     int wkc;
-    wkc = ec_SDOwrite(slaveID, Index_ModesOfOperation, 0, FALSE, 1, &mode, EC_TIMEOUTRXM);
+    wkc = ec_SDOwrite(parameters.ETHERCAT_ID, Index_ModesOfOperation, 0, FALSE, 1, &mode, EC_TIMEOUTRXM);
     osal_usleep(1000);
 
     if(wkc <= 0)
@@ -765,7 +884,7 @@ bool L7NH::setModesOfOperationSDO(int8_t mode)
     }
 
     // Update control mode for states.
-    states.ctlmode = mode;
+    value.ctlmode = mode;
 
     return TRUE;
 }
@@ -775,7 +894,7 @@ int8_t L7NH::getModeOfOperationSDO(void)
     int wkc;
     int size = 1;
     int8_t mode;
-    wkc = ec_SDOread(slaveID, Index_ModesOfOperation, 0, FALSE, &size, &mode, EC_TIMEOUTRXM);
+    wkc = ec_SDOread(parameters.ETHERCAT_ID, Index_ModesOfOperation, 0, FALSE, &size, &mode, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
         return 0;
@@ -789,7 +908,7 @@ bool L7NH::setModesOfOperationPDO(int8_t mode)
         return false;
 
         // Access the process data outputs for the specified slave
-    uint8 *outputs = ec_slave[slaveID].outputs;
+    uint8 *outputs = ec_slave[parameters.ETHERCAT_ID].outputs;
     
     // Write the control word to the specified offset
     int8_t *ptr = (int8_t *)(outputs + RxMapOffset_ModesOfOperation);
@@ -804,7 +923,7 @@ bool L7NH::setControlWordPDO(uint16 control_word)
         return false;
 
     // Access the process data outputs for the specified slave
-    uint8 *outputs = ec_slave[slaveID].outputs;
+    uint8 *outputs = ec_slave[parameters.ETHERCAT_ID].outputs;
     
     // Write the control word to the specified offset
     uint16 *control_word_ptr = (uint16 *)(outputs + RxMapOffset_ControlWord);
@@ -819,7 +938,7 @@ uint16 L7NH::getStatuseWordPDO(void)
         return 0;
 
     // Access the process data inputs for the specified slave
-    uint8 *inputs = ec_slave[slaveID].inputs;
+    uint8 *inputs = ec_slave[parameters.ETHERCAT_ID].inputs;
     
     // Read the status word from the specified offset
     uint16 *status_word_ptr = (uint16 *)(inputs + TxMapOffset_StatusWord);
@@ -832,7 +951,7 @@ int8_t L7NH::getOperationModeDisplayPDO(void)
         return 0;
 
     // Access the process data inputs for the specified slave
-    uint8 *inputs = ec_slave[slaveID].inputs;
+    uint8 *inputs = ec_slave[parameters.ETHERCAT_ID].inputs;
     
     // Read the status word from the specified offset
     int8 *ptr = (int8 *)(inputs + TxMapOffset_OperationModeDisplay);
@@ -841,7 +960,7 @@ int8_t L7NH::getOperationModeDisplayPDO(void)
 
 bool L7NH::setControlWordSDO(uint16 control_word)
 {
-    int wkc = ec_SDOwrite(slaveID, Index_Controlword, 0, FALSE, 1, &control_word, EC_TIMEOUTRXM);
+    int wkc = ec_SDOwrite(parameters.ETHERCAT_ID, Index_Controlword, 0, FALSE, 1, &control_word, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
         return FALSE;
@@ -854,7 +973,7 @@ uint16_t L7NH::getStatuseWordSDO(void)
     int wkc;
     int size = 2;
     uint16_t data;
-    wkc = ec_SDOread(slaveID, Index_Statusword, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
+    wkc = ec_SDOread(parameters.ETHERCAT_ID, Index_Statusword, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
         return 0;
@@ -917,7 +1036,7 @@ void L7NH::stateUpdate(uint16_t statusWord) {
 
 bool L7NH::setTargetPositionSDO(int32_t position)
 {
-    int wkc = ec_SDOwrite(slaveID, Index_TargetPosition, 0, FALSE, 4, &position, EC_TIMEOUTRXM);
+    int wkc = ec_SDOwrite(parameters.ETHERCAT_ID, Index_TargetPosition, 0, FALSE, 4, &position, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
         return FALSE;
@@ -931,7 +1050,7 @@ bool L7NH::setTargetPositionPDO(int32_t position)
         return false;
 
     // Access the process data outputs for the specified slave
-    uint8 *outputs = ec_slave[slaveID].outputs;
+    uint8 *outputs = ec_slave[parameters.ETHERCAT_ID].outputs;
     
     // Write the position to the specified offset
     int32_t *position_ptr = (int32_t *)(outputs + RxMapOffset_TargetPosition);
@@ -945,7 +1064,7 @@ int32_t L7NH::getPositionActualSDO(void)
     int wkc;
     int size = 4;
     int32_t data;
-    wkc = ec_SDOread(slaveID, Index_PositionActualValue, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
+    wkc = ec_SDOread(parameters.ETHERCAT_ID, Index_PositionActualValue, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
         return 0;
@@ -959,7 +1078,7 @@ int32_t L7NH::getPositionActualPDO(void)
         return 0;
 
     // Access the process data inputs for the specified slave
-    uint8 *inputs = ec_slave[slaveID].inputs;
+    uint8 *inputs = ec_slave[parameters.ETHERCAT_ID].inputs;
     
     // Read from the specified offset
     int32_t data = *(int32_t *)(inputs + TxMapOffset_PositionActual);
@@ -972,7 +1091,7 @@ int32_t L7NH::getPositionDemandInternalSDO(void)
     int wkc;
     int size = 4;
     int32_t data;
-    wkc = ec_SDOread(slaveID, Index_PositionDemandInternalValue, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
+    wkc = ec_SDOread(parameters.ETHERCAT_ID, Index_PositionDemandInternalValue, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
         return 0;
@@ -1027,9 +1146,9 @@ bool L7NH::setDigitalInput(uint8_t inputChannel, uint8_t assignedValue, uint8_t 
         return false;
     }
 
-    uint16_t data = ((uint16_t)activeMode << 15) || ((uint16_t)assignedValue); 
+    uint16_t data = ((uint16_t)activeMode << 15) | ((uint16_t)assignedValue); 
 
-    int wkc = ec_SDOwrite(slaveID, index, 0, FALSE, 2, &data, EC_TIMEOUTRXM);
+    int wkc = ec_SDOwrite(parameters.ETHERCAT_ID, index, 0, FALSE, 2, &data, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
         return false;
@@ -1042,14 +1161,14 @@ uint8_t L7NH::getDigitalInputValueSDO(void)
     int wkc;
     int size = 4;
     uint32_t data;
-    wkc = ec_SDOread(slaveID, Index_DigitalInputs, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
+    wkc = ec_SDOread(parameters.ETHERCAT_ID, Index_DigitalInputs, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
 
     if(wkc <=0)
         return 0;
 
-    uint8_t value = (uint8_t)((data >> 16) && 0xFF);
+    uint8_t value = (uint8_t)((data >> 16) & 0xFF);
 
-    return data;
+    return value;
 }
 
 uint8_t L7NH::getDigitalInputValuePDO(void)
@@ -1058,14 +1177,14 @@ uint8_t L7NH::getDigitalInputValuePDO(void)
         return 0;
 
     // Access the process data inputs for the specified slave
-    uint8 *inputs = ec_slave[slaveID].inputs;
+    uint8 *inputs = ec_slave[parameters.ETHERCAT_ID].inputs;
     
     // Read from the specified offset
     uint32_t data = *(uint32_t *)(inputs + TxMapOffset_DigitalInput);
 
-    uint8_t value = (uint8_t)((data >> 16) && 0xFF);
+    uint8_t value = (uint8_t)((data >> 16) & 0xFF);
 
-    return data;
+    return value;
 }
 
 int8_t L7NH::getDigitalInputAssignedValue(uint8_t inputChannel)
@@ -1105,12 +1224,12 @@ int8_t L7NH::getDigitalInputAssignedValue(uint8_t inputChannel)
     int wkc;
     int size = 2;
     uint16_t data;
-    wkc = ec_SDOread(slaveID, index, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
+    wkc = ec_SDOread(parameters.ETHERCAT_ID, index, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
 
     if(wkc <=0)
         return -1;
 
-    uint8_t value = (data && 0XFF);
+    uint8_t value = (data & 0XFF);
 
     return value;
 }
@@ -1152,7 +1271,7 @@ int8_t L7NH::getDigitalInputActiveMode(uint8_t inputChannel)
     int wkc;
     int size = 2;
     uint16_t data;
-    wkc = ec_SDOread(slaveID, index, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
+    wkc = ec_SDOread(parameters.ETHERCAT_ID, index, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
 
     if(wkc <=0)
         return -1;
@@ -1167,7 +1286,7 @@ int8_t L7NH::getDigitalInputActiveMode(uint8_t inputChannel)
 
 bool L7NH::setProcedureCommandCode(uint16_t value)
 {
-    int wkc = ec_SDOwrite(slaveID, Index_ProcedureCommandCode, 0, FALSE, 2, &value, EC_TIMEOUTRXM);
+    int wkc = ec_SDOwrite(parameters.ETHERCAT_ID, Index_ProcedureCommandCode, 0, FALSE, 2, &value, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
         return FALSE;
@@ -1177,7 +1296,7 @@ bool L7NH::setProcedureCommandCode(uint16_t value)
 
 bool L7NH::setProcedureCommandArgument(uint16_t value)
 {
-    int wkc = ec_SDOwrite(slaveID, Index_ProcedureCommandArgument, 0, FALSE, 2, &value, EC_TIMEOUTRXM);
+    int wkc = ec_SDOwrite(parameters.ETHERCAT_ID, Index_ProcedureCommandArgument, 0, FALSE, 2, &value, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
         return FALSE;
@@ -1186,48 +1305,58 @@ bool L7NH::setProcedureCommandArgument(uint16_t value)
 }
 
 bool L7NH::ManualJOG_ServoOn(void)
-{
-    bool flag;
-    flag = setProcedureCommandCode(ProcedureCommandCode_ManualJOG);
-    flag = flag && setProcedureCommandArgument(1);
-
-    return flag;
+{    
+    for(int i = 1; i<=2; i++)
+    {
+        setProcedureCommandCode(ProcedureCommandCode_ManualJOG);
+        setProcedureCommandArgument(1);
+        osal_usleep(100000);
+    }
+    return true;
 }
 
 bool L7NH::ManualJOG_ServoOff(void)
 {
-    bool flag;
-    flag = setProcedureCommandCode(ProcedureCommandCode_ManualJOG);
-    flag = flag && setProcedureCommandArgument(2);
-
-    return flag;
+    for(int i = 1; i<=2; i++)
+    {
+        setProcedureCommandCode(ProcedureCommandCode_ManualJOG);
+        setProcedureCommandArgument(2);
+        osal_usleep(100000);
+    }
+    return true;
 }
 
 bool L7NH::ManualJOG_Positive(void)
 {
-    bool flag;
-    flag = setProcedureCommandCode(ProcedureCommandCode_ManualJOG);
-    flag = flag && setProcedureCommandArgument(3);
-
-    return flag;
+    for(int i = 1; i<=2; i++)
+    {
+        setProcedureCommandCode(ProcedureCommandCode_ManualJOG);
+        setProcedureCommandArgument(3);
+        osal_usleep(100000);
+    }
+    return true;
 }
 
 bool L7NH::ManualJOG_Negative(void)
 {
-    bool flag;
-    flag = setProcedureCommandCode(ProcedureCommandCode_ManualJOG);
-    flag = flag && setProcedureCommandArgument(4);
-
-    return flag;
+    for(int i = 1; i<=2; i++)
+    {
+        setProcedureCommandCode(ProcedureCommandCode_ManualJOG);
+        setProcedureCommandArgument(4);
+        osal_usleep(100000);
+    }
+    return true;
 }
 
 bool L7NH::ManualJOG_Stop(void)
 {
-    bool flag;
-    flag = setProcedureCommandCode(ProcedureCommandCode_ManualJOG);
-    flag = flag && setProcedureCommandArgument(5);
-
-    return flag;
+    for(int i = 1; i<=2; i++)
+    {
+        setProcedureCommandCode(ProcedureCommandCode_ManualJOG);
+        setProcedureCommandArgument(5);
+        osal_usleep(100000);
+    }
+    return true;
 }
 
 // ++++++++++++++++++++++++++++++++++++++++++++++++
@@ -1240,7 +1369,7 @@ void L7NH::setRatedTorque(double value)
 
 bool L7NH::setMaximumTorqueSDO(uint16_t torque)
 {
-    int wkc = ec_SDOwrite(slaveID, Index_MaximumTorque, 0, FALSE, 2, &torque, EC_TIMEOUTRXM);
+    int wkc = ec_SDOwrite(parameters.ETHERCAT_ID, Index_MaximumTorque, 0, FALSE, 2, &torque, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
         return FALSE;
@@ -1250,7 +1379,7 @@ bool L7NH::setMaximumTorqueSDO(uint16_t torque)
 
 bool L7NH::setTorqueSlopeSDO(uint32_t slope)
 {
-    int wkc = ec_SDOwrite(slaveID, Index_TorqueSlope, 0, FALSE, 4, &slope, EC_TIMEOUTRXM);
+    int wkc = ec_SDOwrite(parameters.ETHERCAT_ID, Index_TorqueSlope, 0, FALSE, 4, &slope, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
         return FALSE;
@@ -1260,7 +1389,7 @@ bool L7NH::setTorqueSlopeSDO(uint32_t slope)
 
 bool L7NH::setTorqueLimitFunctionSelectSDO(uint16_t value)
 {
-    int wkc = ec_SDOwrite(slaveID, Index_TorqueLimitFunctionSelect, 0, FALSE, 2, &value, EC_TIMEOUTRXM);
+    int wkc = ec_SDOwrite(parameters.ETHERCAT_ID, Index_TorqueLimitFunctionSelect, 0, FALSE, 2, &value, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
         return FALSE;
@@ -1270,7 +1399,7 @@ bool L7NH::setTorqueLimitFunctionSelectSDO(uint16_t value)
 
 bool L7NH::setTargetTorqueSDO(int16_t torque)
 {
-    int wkc = ec_SDOwrite(slaveID, Index_TargetTorque, 0, FALSE, 2, &torque, EC_TIMEOUTRXM);
+    int wkc = ec_SDOwrite(parameters.ETHERCAT_ID, Index_TargetTorque, 0, FALSE, 2, &torque, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
         return FALSE;
@@ -1284,7 +1413,7 @@ bool L7NH::setTargetTorquePDO(int16_t torque)
         return false;
 
     // Access the process data outputs for the specified slave
-    uint8 *outputs = ec_slave[slaveID].outputs;
+    uint8 *outputs = ec_slave[parameters.ETHERCAT_ID].outputs;
     
     // Write the torque to the specified offset
     int16_t *torque_ptr = (int16_t *)(outputs + RxMapOffset_TargetTorque);
@@ -1299,7 +1428,7 @@ int16_t L7NH::getTorqueActualPDO(void)
         return 0;
 
     // Access the process data inputs for the specified slave
-    uint8 *inputs = ec_slave[slaveID].inputs;
+    uint8 *inputs = ec_slave[parameters.ETHERCAT_ID].inputs;
     
     // Read from the specified offset
     int32_t data = *(int32_t *)(inputs + TxMapOffset_TorqueActual);
@@ -1310,7 +1439,7 @@ int16_t L7NH::getTorqueActualPDO(void)
 int16_t L7NH::getTorqueDemandPDO(void)
 {
     // Access the process data inputs for the specified slave
-    uint8 *inputs = ec_slave[slaveID].inputs;
+    uint8 *inputs = ec_slave[parameters.ETHERCAT_ID].inputs;
     
     // Read from the specified offset
     int32_t data = *(int32_t *)(inputs + TxMapOffset_TorqueDemand);
@@ -1323,7 +1452,7 @@ int16_t L7NH::getTargetTorqueSDO(void)
     int wkc;
     int size = 2;
     int16_t data;
-    wkc = ec_SDOread(slaveID, Index_TargetTorque, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
+    wkc = ec_SDOread(parameters.ETHERCAT_ID, Index_TargetTorque, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
 
     if(wkc <=0)
         return 0;
@@ -1336,7 +1465,7 @@ int16_t L7NH::getTorqueActualSDO(void)
     int wkc;
     int size = 2;
     int16_t data;
-    wkc = ec_SDOread(slaveID, Index_TorqueActualValue, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
+    wkc = ec_SDOread(parameters.ETHERCAT_ID, Index_TorqueActualValue, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
 
     if(wkc <=0)
         return 0;
@@ -1349,7 +1478,7 @@ int16_t L7NH::getTorqueDemandSDO(void)
     int wkc;
     int size = 2;
     int16_t data;
-    wkc = ec_SDOread(slaveID, Index_TorqueDemandValue, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
+    wkc = ec_SDOread(parameters.ETHERCAT_ID, Index_TorqueDemandValue, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
 
     if(wkc <=0)
         return 0;
@@ -1365,7 +1494,7 @@ uint32_t L7NH::getSupportedDriveModes(bool show_op)
     int wkc;
     int size = 4;
     uint32_t data;
-    wkc = ec_SDOread(slaveID, Index_SupportedDriveModes, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
+    wkc = ec_SDOread(parameters.ETHERCAT_ID, Index_SupportedDriveModes, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
         return 0;
@@ -1426,7 +1555,7 @@ int32_t L7NH::getPositionActualInternalSDO(void)
     int wkc;
     int size = 4;
     int32_t data;
-    wkc = ec_SDOread(slaveID, Index_PositionActualInternalValue, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
+    wkc = ec_SDOread(parameters.ETHERCAT_ID, Index_PositionActualInternalValue, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
         return 0;
@@ -1437,7 +1566,7 @@ int32_t L7NH::getPositionActualInternalSDO(void)
 int32_t L7NH::getPositionActualInternalPDO(void)
 {
     // Access the process data inputs for the specified slave
-    uint8 *inputs = ec_slave[slaveID].inputs;
+    uint8 *inputs = ec_slave[parameters.ETHERCAT_ID].inputs;
     
     // Write the torque to the specified offset
     int32_t data = *(int32_t *)(inputs + TxMapOffset_PositionActualInternal);
@@ -1453,7 +1582,7 @@ int32_t L7NH::getVelocityActualSDO(void)
     int wkc;
     int size = 4;
     int32_t data;
-    wkc = ec_SDOread(slaveID, Index_VelocityActualValue, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
+    wkc = ec_SDOread(parameters.ETHERCAT_ID, Index_VelocityActualValue, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
         return 0;
@@ -1466,7 +1595,7 @@ int32_t L7NH::getVelocityDemandSDO(void)
     int wkc;
     int size = 4;
     int32_t data;
-    wkc = ec_SDOread(slaveID, Index_VelocityDemandValue, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
+    wkc = ec_SDOread(parameters.ETHERCAT_ID, Index_VelocityDemandValue, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
         return 0;
@@ -1480,7 +1609,7 @@ int32_t L7NH::getVelocityActualPDO(void)
         return 0;
 
     // Access the process data inputs for the specified slave
-    uint8 *inputs = ec_slave[slaveID].inputs;
+    uint8 *inputs = ec_slave[parameters.ETHERCAT_ID].inputs;
     
     // Write the torque to the specified offset
     int32_t data = *(int32_t *)(inputs + TxMapOffset_VelocityActual);
@@ -1491,7 +1620,7 @@ int32_t L7NH::getVelocityActualPDO(void)
 int32_t L7NH::getVelocityDemandPDO(void)
 {
     // Access the process data inputs for the specified slave
-    uint8 *inputs = ec_slave[slaveID].inputs;
+    uint8 *inputs = ec_slave[parameters.ETHERCAT_ID].inputs;
     
     // Write the torque to the specified offset
     int32_t data = *(int32_t *)(inputs + TxMapOffset_VelocityDemand);
@@ -1505,7 +1634,7 @@ bool L7NH::setTargetVelocityPDO(int32_t velocity)
         return false;
 
     // Access the process data outputs for the specified slave
-    uint8 *outputs = ec_slave[slaveID].outputs;
+    uint8 *outputs = ec_slave[parameters.ETHERCAT_ID].outputs;
     
     // Write the torque to the specified offset
     int32_t *velocity_ptr = (int32_t *)(outputs + RxMapOffset_TargetVelocity);
@@ -1516,7 +1645,7 @@ bool L7NH::setTargetVelocityPDO(int32_t velocity)
 
 bool L7NH::setTargetVelocitySDO(int32_t velocity)
 {
-    int wkc = ec_SDOwrite(slaveID, Index_TargetVelocity, 0, FALSE, 4, &velocity, EC_TIMEOUTRXM);
+    int wkc = ec_SDOwrite(parameters.ETHERCAT_ID, Index_TargetVelocity, 0, FALSE, 4, &velocity, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
         return FALSE;
@@ -1526,7 +1655,7 @@ bool L7NH::setTargetVelocitySDO(int32_t velocity)
 
 bool L7NH::setMaxProfileVelocitySDO(uint32_t velocity)
 {
-    int wkc = ec_SDOwrite(slaveID, Index_MaxProfileVelocity, 0, FALSE, 4, &velocity, EC_TIMEOUTRXM);
+    int wkc = ec_SDOwrite(parameters.ETHERCAT_ID, Index_MaxProfileVelocity, 0, FALSE, 4, &velocity, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
         return FALSE;
@@ -1546,7 +1675,7 @@ bool L7NH::setSpeedLimitFunctionSelect(bool state)
         data = 0;
     }
 
-    int wkc = ec_SDOwrite(slaveID, Index_SpeedLimitFunctionSelect, 0, FALSE, 2, &data, EC_TIMEOUTRXM);
+    int wkc = ec_SDOwrite(parameters.ETHERCAT_ID, Index_SpeedLimitFunctionSelect, 0, FALSE, 2, &data, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
         return FALSE;
@@ -1556,7 +1685,7 @@ bool L7NH::setSpeedLimitFunctionSelect(bool state)
 
 bool L7NH::setSpeedLimitValueAtTorqueControlMode(uint16_t value)
 {
-    int wkc = ec_SDOwrite(slaveID, Index_SpeedLimitValueAtTorqueControlMode, 0, FALSE, 2, &value, EC_TIMEOUTRXM);
+    int wkc = ec_SDOwrite(parameters.ETHERCAT_ID, Index_SpeedLimitValueAtTorqueControlMode, 0, FALSE, 2, &value, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
         return FALSE;
@@ -1569,7 +1698,7 @@ int16_t L7NH::getFeedbackSpeedSDO(void)
     int wkc;
     int size = 2;
     int16_t data;
-    wkc = ec_SDOread(slaveID, Index_FeedbackSpeed, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
+    wkc = ec_SDOread(parameters.ETHERCAT_ID, Index_FeedbackSpeed, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
         return 0;
@@ -1583,7 +1712,7 @@ int16_t L7NH::getFeedbackSpeedPDO(void)
     return false;
 
     // Access the process data inputs for the specified slave
-    uint8 *inputs = ec_slave[slaveID].inputs;
+    uint8 *inputs = ec_slave[parameters.ETHERCAT_ID].inputs;
     
     // Write the torque to the specified offset
     int32_t data = *(int32_t *)(inputs + TxMapOffset_FeedbackSpeed);
@@ -1596,7 +1725,7 @@ uint16_t L7NH::getMotorRatedSpeed(void)
     int wkc;
     int size = 2;
     uint16_t data;
-    wkc = ec_SDOread(slaveID, Index_MotorRatedSpeed, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
+    wkc = ec_SDOread(parameters.ETHERCAT_ID, Index_MotorRatedSpeed, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
         return 0;
@@ -1606,7 +1735,7 @@ uint16_t L7NH::getMotorRatedSpeed(void)
 
 bool L7NH::setJogOperationSpeed(int16_t value)
 {
-    int wkc = ec_SDOwrite(slaveID, Index_JogOperationSpeed, 0, FALSE, 2, &value, EC_TIMEOUTRXM);
+    int wkc = ec_SDOwrite(parameters.ETHERCAT_ID, Index_JogOperationSpeed, 0, FALSE, 2, &value, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
         return FALSE;  
@@ -1616,7 +1745,7 @@ bool L7NH::setJogOperationSpeed(int16_t value)
 
 bool L7NH::setSpeedCommandAccelerationTime(uint16_t value)
 {
-    int wkc = ec_SDOwrite(slaveID, Index_SpeedCommandAccelerationTime, 0, FALSE, 2, &value, EC_TIMEOUTRXM);
+    int wkc = ec_SDOwrite(parameters.ETHERCAT_ID, Index_SpeedCommandAccelerationTime, 0, FALSE, 2, &value, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
         return FALSE;  
@@ -1626,7 +1755,7 @@ bool L7NH::setSpeedCommandAccelerationTime(uint16_t value)
 
 bool L7NH::setSpeedCommandDecelerationTime(uint16_t value)
 {
-    int wkc = ec_SDOwrite(slaveID, Index_SpeedCommandDecelerationTime, 0, FALSE, 2, &value, EC_TIMEOUTRXM);
+    int wkc = ec_SDOwrite(parameters.ETHERCAT_ID, Index_SpeedCommandDecelerationTime, 0, FALSE, 2, &value, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
         return FALSE;  
@@ -1636,7 +1765,7 @@ bool L7NH::setSpeedCommandDecelerationTime(uint16_t value)
 
 bool L7NH::setSpeedCommandScurveTime(uint16_t value)
 {
-    int wkc = ec_SDOwrite(slaveID, Index_SpeedCommandScurveTime, 0, FALSE, 2, &value, EC_TIMEOUTRXM);
+    int wkc = ec_SDOwrite(parameters.ETHERCAT_ID, Index_SpeedCommandScurveTime, 0, FALSE, 2, &value, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
         return FALSE;  
@@ -1651,7 +1780,7 @@ bool L7NH::setServoLockFunctionSetting(uint16_t value)
         return false;
     }
 
-    int wkc = ec_SDOwrite(slaveID, Index_ServoLockFunctionSetting, 0, FALSE, 2, &value, EC_TIMEOUTRXM);
+    int wkc = ec_SDOwrite(parameters.ETHERCAT_ID, Index_ServoLockFunctionSetting, 0, FALSE, 2, &value, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
         return FALSE;  
@@ -1661,7 +1790,7 @@ bool L7NH::setServoLockFunctionSetting(uint16_t value)
 
 bool L7NH::setProfileAccelerationSDO(int32_t acc)
 {
-    int wkc = ec_SDOwrite(slaveID, Index_ProfileAcceleration, 0, FALSE, 4, &acc, EC_TIMEOUTRXM);
+    int wkc = ec_SDOwrite(parameters.ETHERCAT_ID, Index_ProfileAcceleration, 0, FALSE, 4, &acc, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
         return FALSE;
@@ -1671,7 +1800,7 @@ bool L7NH::setProfileAccelerationSDO(int32_t acc)
 
 bool L7NH::setProfileDecelerationSDO(int32 acc)
 {
-    int wkc = ec_SDOwrite(slaveID, Index_ProfileDeceleration, 0, FALSE, 4, &acc, EC_TIMEOUTRXM);
+    int wkc = ec_SDOwrite(parameters.ETHERCAT_ID, Index_ProfileDeceleration, 0, FALSE, 4, &acc, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
         return FALSE;
@@ -1706,7 +1835,7 @@ int L7NH::startHoming(void) {
 bool L7NH::setHomeOffset(int32_t offset)
 {
     int wkc;
-    wkc = ec_SDOwrite(slaveID, Index_HomeOffset, 0, FALSE, 4, &offset, EC_TIMEOUTRXM);
+    wkc = ec_SDOwrite(parameters.ETHERCAT_ID, Index_HomeOffset, 0, FALSE, 4, &offset, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
         return FALSE;
@@ -1719,7 +1848,7 @@ int32_t L7NH::getHomeoffset(void)
     int wkc;
     int32_t data;
     int size = 4;
-    wkc = ec_SDOread(slaveID, Index_HomeOffset, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
+    wkc = ec_SDOread(parameters.ETHERCAT_ID, Index_HomeOffset, 0, FALSE, &size, &data, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
         return 0;
@@ -1730,7 +1859,7 @@ int32_t L7NH::getHomeoffset(void)
 bool L7NH::setHomingMethod(int8_t method)
 {
     int wkc;
-    wkc = ec_SDOwrite(slaveID, Index_HomingMethod, 0, FALSE, 1, &method, EC_TIMEOUTRXM);
+    wkc = ec_SDOwrite(parameters.ETHERCAT_ID, Index_HomingMethod, 0, FALSE, 1, &method, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
         return FALSE;
@@ -1739,58 +1868,18 @@ bool L7NH::setHomingMethod(int8_t method)
 }
 
 // ++++++++++++++++++++++++++++++++++++++++++++++++
-// Auto configuration options:
 
-bool L7NH::autoSetup(int ID, int setup_num)
+bool L7NH::updateValuesPDO(void)
 {
-    setSlaveID(ID);
+    value.posActRaw = getPositionActualPDO();
+    value.velActRaw = getVelocityActualPDO();
+    value.trqActRaw = getTorqueActualPDO();
+    value.statusword = getStatuseWordPDO();
+    value.ctlmode = getOperationModeDisplayPDO();
 
-    if(setup_num == 1)
-    {
-        if(setModesOfOperationSDO(OPERATION_MODE_CST) == FALSE)
-        {
-            return FALSE;
-        }
-        
-        assignRxPDO_rank(1);
-        assignTxPDO_rank(1);
-
-        uint32_t map_rx[2] = {MapValue_ControlWord, MapValue_TargetTorque};
-        uint32_t map_tx[5] = {MapValue_StatusWord, MapValue_PositionActual, MapValue_VelocityActual, MapValue_OperationModeDisplay, MapValue_DigitalInput};
-            
-        if(setRxPDO(sizeof(map_rx)/4, map_rx) == FALSE)
-            return FALSE;
-
-        if(setTxPDO(sizeof(map_tx)/4, map_tx) == FALSE)
-            return FALSE;
-    } 
-    else
-    {
-        return false;
-    }
-
-    PulsePerRevolution = 0;
-    PulsePerRevolution = getEncoderPulsePerRevolution();
-
-    if(PulsePerRevolution == 0)
-        return false;
-
-    return TRUE;
-}
-
-// ++++++++++++++++++++++++++++++++++++++++++++++++
-
-bool L7NH::updateStatesPDO(void)
-{
-    states.posActRaw = getPositionActualPDO();
-    states.velActRaw = getVelocityActualPDO();
-    states.trqActRaw = getTorqueActualPDO();
-    states.statusword = getStatuseWordPDO();
-    states.ctlmode = getOperationModeDisplayPDO();
-
-    states.posAct = ((double)states.posActRaw / (double)PulsePerRevolution) * 360.0;
-    states.velAct = ((double)states.velActRaw / (double)PulsePerRevolution) * 60.0;
-    states.trqAct = (double)states.trqActRaw * 0.1;
+    value.posAct = ((double)value.posActRaw / (double)PulsePerRevolution) * 360.0;
+    value.velAct = ((double)value.velActRaw / (double)PulsePerRevolution) * 60.0;
+    value.trqAct = (double)value.trqActRaw * 0.1;
 
     /*
     Servo On Conditions for statusword:
@@ -1806,29 +1895,29 @@ bool L7NH::updateStatesPDO(void)
     Bit 3 (Fault): Should be set (1).
     */
 
-    if(states.statusword & 0b110)
+    if(value.statusword & 0b110)
     {
-        states.run = true;
+        value.run = true;
     }
     else
     {
-        states.run = false;
+        value.run = false;
     }
 
     return true;
 }
 
-bool L7NH::updateStatesSDO(void)
+bool L7NH::updateValuesSDO(void)
 {
-    states.posActRaw = getPositionActualSDO();
-    states.velActRaw = getVelocityActualSDO();
-    states.trqActRaw = getTorqueActualSDO();
-    states.statusword = getStatuseWordSDO();
-    states.ctlmode = getModeOfOperationSDO();
+    value.posActRaw = getPositionActualSDO();
+    value.velActRaw = getVelocityActualSDO();
+    value.trqActRaw = getTorqueActualSDO();
+    value.statusword = getStatuseWordSDO();
+    value.ctlmode = getModeOfOperationSDO();
 
-    states.posAct = ((double)states.posActRaw / (double)PulsePerRevolution) * 360.0;
-    states.velAct = ((double)states.velActRaw / (double)PulsePerRevolution) * 60.0;
-    states.trqAct = (double)states.trqActRaw * 0.1;
+    value.posAct = ((double)value.posActRaw / (double)PulsePerRevolution) * 360.0;
+    value.velAct = ((double)value.velActRaw / (double)PulsePerRevolution) * 60.0;
+    value.trqAct = (double)value.trqActRaw * 0.1;
 
     /*
     Servo On Conditions for statusword:
@@ -1844,13 +1933,13 @@ bool L7NH::updateStatesSDO(void)
     Bit 3 (Fault): Should be set (1).
     */
 
-    if(states.statusword & 0b110)
+    if(value.statusword & 0b110)
     {
-        states.run = true;
+        value.run = true;
     }
     else
     {
-        states.run = false;
+        value.run = false;
     }
 
     return true;
