@@ -23,19 +23,49 @@ using namespace _L7NH;
 L7NH::L7NH()
 {
     parameters.ETHERCAT_ID = -1;
+    parameters.GEAR_RATIO = 0;
+    parameters.PDOMAP_CONFIG_TYPE = 1;
+    parameters.ROTATION_DIR = 0;
+    parameters.SPD_UNIT = 0;
+    parameters.TORQUE_RATED = 0;
 
-    value.run = 0;
-    value.ctlmode = OPERATION_MODE_NO;
-    value.ethMode = EC_STATE_ERROR;
-    value.posAct = 0 ;
-    value.posActRaw = 0;
-    value.statusword = 0;
-    value.trqAct = 0;
-    value.trqActRaw = 0;
-    value.trqActRaw_cmd = 0;
+    value.runState = 0;
+    value.faultState = 0;
+    value.limitState = 0;
+    value.powerState = 0;
+    value.warningState = 0;
+    
+    value.controlMode = OPERATION_MODE_NO;
+    value.ethercatState = EC_STATE_NONE;
+
+    value.posActCmdDeg = 0;
+    value.posActDeg = 0;
+    value.posActStep = 0;
+    value.posActTargetDeg = 0;
     value.velAct = 0;
-    value.velActRaw = 0;
-    value.velActRaw_cmd = 0;
+    value.velActCmd = 0;
+    value.velActStep = 0;
+    value.velActTarget = 0;
+    value.trqActCmdStep = 0;
+    value.trqActNm = 0;
+    value.trqActStep = 0;
+    for(int i = 0; i <= 7; i++)
+    {
+        value.digitalInputs[i] = 0;
+    }
+
+    _PulsePerRevolution = 0;
+    _velConStep2Uu = 1;
+
+    for(int i = 0; i <= (int)sizeof(_TxMapFlag); i++)
+    {
+        _TxMapFlag[i] = 0;
+    }
+
+    for(int i = 0; i <= (int)sizeof(_RxMapFlag); i++)
+    {
+        _RxMapFlag[i] = 0;
+    }
 }
 
 bool L7NH::init(void)
@@ -47,54 +77,72 @@ bool L7NH::init(void)
 
     if(std::string(ec_slave[parameters.ETHERCAT_ID].name) == "")
     {
-        errorMessage = "Error L7NH: Motor drive can not detected.";
+        errorMessage = "Error Servo Driver L7NH: Motor drive can not detected.";
         return false;
     }
 
-    PulsePerRevolution = getEncoderPulsePerRevolution();
+    _PulsePerRevolution = getEncoderPulsePerRevolution();
 
-    if(PulsePerRevolution == 0)
+    if(_PulsePerRevolution == 0)
     {
-        errorMessage = "Error L7NH: Motor drive communication problem.";
+        errorMessage = "Error Servo Driver L7NH: Motor drive getEncoderPulsePerRevolution() was not successed.";
         return false;
     }
 
-    if(setModesOfOperationSDO(OPERATION_MODE_CST) == FALSE)
+    if(setModesOfOperationSDO(OPERATION_MODE_NO) == FALSE)
     {
         return FALSE;
     }
     
+    switch(parameters.SPD_UNIT)
+    {
+        case 0:
+            _velConStep2Uu = 60.0 / (float)_PulsePerRevolution;
+        break;
+        case 1:
+            _velConStep2Uu = 360.0 / (float)_PulsePerRevolution;
+        break;
+        default:
+            _velConStep2Uu = 1.0;
+    }
+
     assignRxPDO_rank(1);
     assignTxPDO_rank(1);
 
-    switch(parameters.PDOMAP_CONFIG_TYPE)
+    if(parameters.PDOMAP_CONFIG_TYPE == 1)
     {
-        case 1:
-            uint32_t map_rx[2] = {MapValue_ControlWord, MapValue_TargetTorque};
-            uint32_t map_tx[5] = {MapValue_StatusWord, MapValue_PositionActual, MapValue_VelocityActual, MapValue_OperationModeDisplay, MapValue_DigitalInput};
-                
-            if(setRxPDO(sizeof(map_rx)/4, map_rx) == false)
-                return FALSE;
+        uint32_t map_rx[2] = {MapValue_ControlWord, MapValue_TargetTorque};
+        uint32_t map_tx[5] = {MapValue_StatusWord, MapValue_PositionActual, MapValue_VelocityActual, MapValue_OperationModeDisplay, MapValue_DigitalInput};
+            
+        if(setRxPDO(sizeof(map_rx)/4, map_rx) == false)
+            return FALSE;
 
-            if(setTxPDO(sizeof(map_tx)/4, map_tx) == false)
-                return false;
-        break;
-        default:
+        if(setTxPDO(sizeof(map_tx)/4, map_tx) == false)
             return false;
     }
-
-    PulsePerRevolution = getEncoderPulsePerRevolution();
-
-    if(PulsePerRevolution == 0)
+    else
     {
+        errorMessage = "Error Servo Driver L7NH: PDO configuration was not successed.";
         return false;
     }
-        
+ 
     return true;
 }
 
 bool L7NH::checkParameters(void)
 {
+    bool state = (parameters.ETHERCAT_ID >= 1) && 
+                 (parameters.GEAR_RATIO >= 0) &&
+                 (parameters.PDOMAP_CONFIG_TYPE >= 1) &&
+                 (parameters.ROTATION_DIR <= 1) &&
+                 (parameters.SPD_UNIT <= 1) &&
+                 (parameters.TORQUE_RATED >= 0);
+
+    if(state == false)
+    {
+        errorMessage = "Error Servo Driver L7NH: One or some parameters are not correct.";
+        return false;
+    }
 
     return true;
 }
@@ -200,7 +248,7 @@ bool L7NH::assignTxPDO_rank(int pdo_rank)
     return TRUE;
 }
 
-uint16_t L7NH::getRxPDO_rank(void)
+uint16_t L7NH::getRxPDOIndex(void)
 {
     int wkc;           
     int size = 2;
@@ -208,12 +256,15 @@ uint16_t L7NH::getRxPDO_rank(void)
     wkc = ec_SDOread(parameters.ETHERCAT_ID, Index_syncManagerAssignedRxPDO, 1, FALSE, &size, &data, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
+    {
+        errorMessage = "Error Servo driver L7NH: getRxPDOIndex() was not successed.";
         return 0;
-
+    }
+        
     return data;
 }
 
-uint16_t L7NH::getTxPDO_rank(void)
+uint16_t L7NH::getTxPDOIndex(void)
 {
     int wkc;
     int size = 2;
@@ -221,7 +272,10 @@ uint16_t L7NH::getTxPDO_rank(void)
     wkc = ec_SDOread(parameters.ETHERCAT_ID, Index_syncManagerAssignedTxPDO, 1, FALSE, &size, &data, EC_TIMEOUTRXM);
 
     if(wkc <= 0)
+    {
+        errorMessage = "Error Servo driver L7NH: getTxPDOIndex() was not successed.";
         return 0;
+    }
 
     return data;
 }
@@ -653,7 +707,11 @@ uint32_t L7NH::getEncoderPulsePerRevolution(void)
     osal_usleep(1000);
 
     if(wkc <= 0)
+    {
+        errorMessage = "Error Servo Driver L7NH: getEncoderPulsePerRevolution() was not successed.";
+        std::cout << errorMessage << std::endl;
         return 0;
+    } 
 
     return data;
 }
@@ -667,19 +725,32 @@ uint8_t L7NH::getRotationDirectionSelect(void)
     osal_usleep(1000);
 
     if(wkc <= 0)
+    {
+        errorMessage = "Error Servo Driver L7NH: getRotationDirectionSelect() was not successed.";
+        std::cout << errorMessage << std::endl;
         return 2;
+    } 
 
     return dir;
 }
 
 bool L7NH::setRotationDirectionSelect(uint16_t dir)
 {
+    if(dir > 1)
+    {
+        errorMessage = "Error Servo Driver L7NH: setRotationDirectionSelect() was not successed.";
+        return false;
+    }
+    
     int wkc;
     wkc = ec_SDOwrite(parameters.ETHERCAT_ID, Index_RotationDirectionSelect, 0, FALSE, 2, &dir, EC_TIMEOUTRXM);
     osal_usleep(1000);
 
     if(wkc <= 0)
-        return FALSE;
+    {
+        errorMessage = "Error Servo Driver L7NH: setRotationDirectionSelect() was not successed.";
+        return false;
+    }
 
     return  TRUE;
 }
@@ -805,30 +876,6 @@ bool L7NH::servoOffPDO(void)
     return true;
 }
 
-bool L7NH::isServoON(void)
-{
-    uint16_t statusWord;
-    int size = sizeof(statusWord);
-
-    // Replace `slave_index` with the index of your servo drive.
-    if (ec_SDOread(parameters.ETHERCAT_ID, 0x6041, 0x00, FALSE, &size, &statusWord, EC_TIMEOUTRXM) > 0) {
-        // Check if the "Operation Enabled" bit (Bit 2) is set
-        bool servoOn = (statusWord & 0x04) != 0;
-        if (servoOn) 
-        {
-            printf("Servo is ON.\n");
-        } else {
-            printf("Servo is OFF.\n");
-            return false;
-        }
-    } else {
-        printf("Failed to read Status Word via SDO.\n");
-        return false;
-    }
-
-    return true;
-}
-
 // +++++++++++++++++++++++++++++++++++++++++++++++++++++
 // Controlword, statusword, Operation mode and machin state
 
@@ -837,34 +884,32 @@ void L7NH::printStateMachine(void)
     uint16_t statusWord = getStatuseWordSDO();
     stateUpdate(statusWord);
 
-    switch(stateMachine)
+    if(value.powerState == true)
     {
-        case NotReadyToSwitchOn:
-            printf("StateMachine: NotReadyToSwitchOn\n");
-        break;
-        case SwitchOnDisabled:
-            printf("StateMachine: SwitchOnDisabled\n");
-        break;
-        case ReadyToSwitchOn:
-            printf("StateMachine: ReadyToSwitchOn\n");
-        break;
-        case SwitchedOn:
-            printf("StateMachine: SwitchedOn\n");
-        break;
-        case OperationEnabled:
-            printf("StateMachine: OperationEnabled\n");
-        break;
-        case QuickStopActive:
-            printf("StateMachine: QuickStopActive\n");
-        break;
-        case FaultReactionActive:
-            printf("StateMachine: FaultReactionActive\n");
-        break;
-        case Fault:
-            printf("StateMachine: Fault\n");
-        break;
-        default:
-            printf("StateMachine: None\n");
+        printf("Servo power state is ON.\n");
+    }
+    else
+    {
+        printf("Servo power state is OFF.\n");
+    }
+
+    if(value.runState == true)
+    {
+        printf("Servo run state is ON.\n");
+    }
+    else
+    {
+        printf("Servo run state is OFF.\n");
+    }
+
+    if(value.warningState == true)
+    {
+        printf("Warning accured.!\n");
+    }
+
+    if(value.faultState == true)
+    {
+        printf("Fault accured.!\n");
     }
 }
 
@@ -876,15 +921,17 @@ bool L7NH::setModesOfOperationSDO(int8_t mode)
 
     if(wkc <= 0)
     {
+        errorMessage = "Error Servo Driver L7NH: setModesOfOperationSDO() was not successed.";
         return FALSE;
     }
     if(getModeOfOperationSDO() != mode)
     {
+        errorMessage = "Error Servo Driver L7NH: setModesOfOperationSDO() was not successed.";
         return FALSE;
     }
 
     // Update control mode for states.
-    value.ctlmode = mode;
+    value.controlMode = mode;
 
     return TRUE;
 }
@@ -981,54 +1028,13 @@ uint16_t L7NH::getStatuseWordSDO(void)
     return data;
 }
 
-void L7NH::stateUpdate(uint16_t statusWord) {
-
-    if(statusWord & StatusWord_MainPowerIsOn)
-        state_MainPowerOn = TRUE;
-    else
-        state_MainPowerOn = FALSE;
-
-    if(statusWord & StatusWord_WarningIsOccurred)
-        state_WarningIsOccurred = TRUE;
-    else
-        state_WarningIsOccurred = FALSE;
-
-    if ((statusWord & 0x004F) == StatusWord_NotReadyToSwitchOn) 
-    {
-        stateMachine = NotReadyToSwitchOn;
-    } 
-    else if ((statusWord & 0x004F) == StatusWord_SwitchOnDisabled) 
-    {
-        stateMachine = SwitchOnDisabled;
-    } 
-    else if ((statusWord & 0x006F) == StatusWord_ReadyToSwitchOn) 
-    {
-        stateMachine = ReadyToSwitchOn;
-    } 
-    else if ((statusWord & 0x006F) == StatusWord_SwitchedOn) 
-    {
-        stateMachine = SwitchedOn;
-    } 
-    else if ((statusWord & 0x006F) == StatusWord_OperationEnabled) 
-    {
-        stateMachine = OperationEnabled;
-    } 
-    else if ((statusWord & 0x006F) == StatusWord_QuickStopActive) 
-    {
-        stateMachine = QuickStopActive;
-    } 
-    else if ((statusWord & 0x004F) == StatusWord_FaultReactionActive) 
-    {
-        stateMachine = FaultReactionActive;
-    } 
-    else if ((statusWord & 0x004F) == StatusWord_Fault) 
-    {
-        stateMachine = Fault;
-    }
-    else
-    {
-        stateMachine = None;        // Default state
-    }
+void L7NH::stateUpdate(uint16_t statusWord) 
+{
+    value.powerState = ((statusWord & (1 << 1)) != 0);
+    value.runState = ((statusWord & (1 << 2)) != 0);
+    value.faultState = ((statusWord & (1 << 3)) == 0);
+    value.warningState = ((statusWord & (1 << 7)) == 0);
+    value.limitState = ((statusWord & (1 << 11)) == 0);
 }
 
 // ++++++++++++++++++++++++++++++++++++++++++++++++
@@ -1361,11 +1367,6 @@ bool L7NH::ManualJOG_Stop(void)
 
 // ++++++++++++++++++++++++++++++++++++++++++++++++
 // Set/Get Torque:
-
-void L7NH::setRatedTorque(double value)
-{
-    ratedTorque = value;
-}
 
 bool L7NH::setMaximumTorqueSDO(uint16_t torque)
 {
@@ -1871,76 +1872,61 @@ bool L7NH::setHomingMethod(int8_t method)
 
 bool L7NH::updateValuesPDO(void)
 {
-    value.posActRaw = getPositionActualPDO();
-    value.velActRaw = getVelocityActualPDO();
-    value.trqActRaw = getTorqueActualPDO();
-    value.statusword = getStatuseWordPDO();
-    value.ctlmode = getOperationModeDisplayPDO();
+    value.posActStep = getPositionActualPDO();
+    value.velActStep = getVelocityActualPDO();
+    value.trqActStep = getTorqueActualPDO();
+    uint16_t statusWord = getStatuseWordPDO();
+    value.controlMode = getOperationModeDisplayPDO();
+    uint8_t digitalInputs = getDigitalInputValuePDO();
 
-    value.posAct = ((double)value.posActRaw / (double)PulsePerRevolution) * 360.0;
-    value.velAct = ((double)value.velActRaw / (double)PulsePerRevolution) * 60.0;
-    value.trqAct = (double)value.trqActRaw * 0.1;
-
-    /*
-    Servo On Conditions for statusword:
-    Bit 0 (Ready to switch on): Should be set (1).
-    Bit 1 (Switched on): Should be set (1).
-    Bit 2 (Operation enabled): Should be set (1).
-    Bit 3 (Fault): Should not be set (0).
-
-    Servo Off Conditions for statusword:
-    Bit 0 (Ready to switch on): Could be set (1) but not necessarily.
-    Bit 1 (Switched on): Should not be set (0).
-    Bit 2 (Operation enabled): Should not be set (0).
-    Bit 3 (Fault): Should be set (1).
-    */
-
-    if(value.statusword & 0b110)
+    for(int i = 0; i <= 7; i++)
     {
-        value.run = true;
-    }
-    else
-    {
-        value.run = false;
+        value.digitalInputs[i] = ( digitalInputs & (1 << i) );
     }
 
+    value.posActDeg = ((float)value.posActStep / (float)_PulsePerRevolution) * 360.0;
+    value.velAct =  _velConStep2Uu * (float)value.velActStep;
+    value.trqActNm = (float)value.trqActStep * 0.1 * parameters.TORQUE_RATED;
+
+    if(parameters.GEAR_RATIO > 0)
+    {
+        value.posActDeg /= parameters.GEAR_RATIO;
+        value.velAct /= parameters.GEAR_RATIO;
+    }
+
+    if(_TxMapFlag[0] != 0)
+    {
+        stateUpdate(statusWord);
+    }
+    
     return true;
 }
 
 bool L7NH::updateValuesSDO(void)
 {
-    value.posActRaw = getPositionActualSDO();
-    value.velActRaw = getVelocityActualSDO();
-    value.trqActRaw = getTorqueActualSDO();
-    value.statusword = getStatuseWordSDO();
-    value.ctlmode = getModeOfOperationSDO();
+    value.posActStep = getPositionActualSDO();
+    value.velActStep = getVelocityActualSDO();
+    value.trqActStep = getTorqueActualSDO();
+    uint16_t statusWord = getStatuseWordSDO();
+    value.controlMode = getModeOfOperationSDO();
+    uint8_t digitalInputs = getDigitalInputValueSDO();
 
-    value.posAct = ((double)value.posActRaw / (double)PulsePerRevolution) * 360.0;
-    value.velAct = ((double)value.velActRaw / (double)PulsePerRevolution) * 60.0;
-    value.trqAct = (double)value.trqActRaw * 0.1;
-
-    /*
-    Servo On Conditions for statusword:
-    Bit 0 (Ready to switch on): Should be set (1).
-    Bit 1 (Switched on): Should be set (1).
-    Bit 2 (Operation enabled): Should be set (1).
-    Bit 3 (Fault): Should not be set (0).
-
-    Servo Off Conditions for statusword:
-    Bit 0 (Ready to switch on): Could be set (1) but not necessarily.
-    Bit 1 (Switched on): Should not be set (0).
-    Bit 2 (Operation enabled): Should not be set (0).
-    Bit 3 (Fault): Should be set (1).
-    */
-
-    if(value.statusword & 0b110)
+    for(int i = 0; i <= 7; i++)
     {
-        value.run = true;
+        value.digitalInputs[i] = ( digitalInputs & (1 << i) );
     }
-    else
+
+    value.posActDeg = ((float)value.posActStep / (float)_PulsePerRevolution) * 360.0;
+    value.velAct =  _velConStep2Uu * (float)value.velActStep;
+    value.trqActNm = (float)value.trqActStep * 0.1 * parameters.TORQUE_RATED;
+
+    if(parameters.GEAR_RATIO > 0)
     {
-        value.run = false;
+        value.posActDeg *= parameters.GEAR_RATIO;
+        value.velAct *= parameters.GEAR_RATIO;
     }
+
+    stateUpdate(statusWord);
 
     return true;
 }

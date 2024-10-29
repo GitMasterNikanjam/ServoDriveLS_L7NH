@@ -14,8 +14,10 @@ class L7NH
 {
 public:
     
+    /// @brief Last error message accured for object.
     std::string errorMessage;
     
+    /// @brief Parameters structure. 
     struct ParameterStructure
     {
         /**
@@ -25,13 +27,9 @@ public:
          * @note
          * Config value Range:
          * 
-         * 0x00: steps/1000 ms
+         * 0: revolutions per Minute (rpm)
          * 
-         * 0x01: steps/100 ms
-         * 
-         * 0x02: steps/10 ms
-         * 
-         * 0x03: revolutions per Minute (rpm)
+         * 1: deg/sec
          */
         uint8_t SPD_UNIT;
 
@@ -40,7 +38,7 @@ public:
          * @note
          * - Scaled_position = GEAR_RATIO * NonScaled_position    
          * 
-         * - If GEAR_RATIO be zero value, it means the gear factor functionality is inactive.
+         * - If GEAR_RATIO be zero value, it means the gear ratio is inactive.
          */
         float GEAR_RATIO;
 
@@ -69,31 +67,44 @@ public:
         uint8_t PDOMAP_CONFIG_TYPE;
 
         /**
-         * @brief Direction behavior. 0: CW, 1:CCW     
-         * @note - If dir be 0 the position value increases if the shaft is rotated clockwise (looking at the shaft). 
-         * @note - If dir be 1 the position value increases if the shaft is rotated counterclockwise (looking at the shaft).  
+         * @brief Direction behavior. 0: CCW, 1:CW     
+         * @note - dir: 0 -> With a positive command, the motor rotates counterclockwise. Then, the position feedback value increases.(looking at the shaft)
+         * @note - dir: 1 -> With a positive command, the motor rotates clockwise. Then, the position feedbackvalue increases.(looking at the shaft)
          */
         uint8_t ROTATION_DIR;
+
+        /**
+         * @brief Rated torque. [N.m]. Its depend on manufacture designing.
+         *  */ 
+        float TORQUE_RATED;
     }parameters;
 
-    struct ValueStructure
+    /// @brief Values structure.
+    struct ValuesStructure
     {
-        int32_t posActRaw;                      // Raw Actual position. [pulses]
-        int32_t velActRaw;                      // Raw Actual  velocity. [pulses/sec]
-        int16_t trqActRaw;                      // Raw Actual torque. [0.1% of nominal torque]
-        double posActRaw_cmd;                  // posActRaw command from out source. [deg]
-        double velActRaw_cmd;                  // velActRaw command from out source. [RPM]
-        double trqActRaw_cmd;                  // trqActRaw command from out source. [%]
-        double posAct;                          // Actual position. [deg]
-        double velAct;                          // Actual  velocity. [RPM]
-        double trqAct;                          // Actual torque. [%]
-        uint8_t ethMode = EC_STATE_NONE;        // Ethercat mode: OPT/PRE_OPT/SAFE_OPT/INIT
-        uint8_t ctlmode = OPERATION_MODE_NO;    // Control mode: NO/PP/PV/PT/HM/CSP/CSV/CST
-        uint8_t run = 0;                        // 1/0 -> On/Off state of driver.
-        uint16_t statusword;                    // Statusword register value.
-    }value;
+        int32_t posActStep;                 ///< Raw Actual position. [pulses]
+        float posActDeg;                   ///< Actual position. [deg]
+        float posActCmdDeg;                ///< posActRaw command from out source. [deg]
+        float posActTargetDeg;
 
-    uint32_t PulsePerRevolution;
+        int32_t velActStep;                 ///< Raw Actual  velocity. [pulses/sec]
+        float velAct;                                                        
+        float velActCmd;                   ///< velActRaw command from out source. [RPM]
+        float velActTarget;
+
+        int16_t trqActStep;                 ///< Raw Actual torque. [0.1% of nominal torque]
+        float trqActNm;                    ///< Actual torque. [%]  
+        float trqActCmdStep;               ///< trqActRaw command from out source. [%]
+        
+        uint8_t ethercatState;              ///< Ethercat mode: OPT/PRE_OPT/SAFE_OPT/INIT/ERROR/NONE
+        uint8_t controlMode;                ///< Control mode: NO/PP/PV/PT/HM/CSP/CSV/CST
+        bool runState;                      ///< 1/0 -> On/Off state of driver.
+        bool powerState;
+        bool faultState;
+        bool warningState;
+        bool limitState;
+        bool digitalInputs[8];               ///< Statusword register value.
+    }value;
     
     /// @brief  Default constructor. Init parameters and values.
     L7NH();
@@ -113,136 +124,152 @@ public:
     // +++++++++++++++++++++++++++++++++++++++++++++++++++++
     // Set/Get TX/RX PDO configurations:
 
-    // Use Sync Manager for assign certain RXPDO
-    // Note: slave must in PRE_OP. 
-    // Use this function before ethercat configMap().
-    // There are 4 value for pdo_rank. 1 to 4. other value return false
+    /**
+     * @brief Use Sync Manager for assign certain RXPDO.
+     * @return true if successed.
+     * @note - slave must in PRE_OP.
+     * @note - Use this function before ethercat configMap().
+     * @note - There are 4 value for pdo_rank. 1 to 4. other value return false.
+     */
     bool assignRxPDO_rank(int pdo_rank);
 
-    // Use Sync Manager for assign certain TXPDO 
-    // Note: slave must in PRE_OP.
-    // Use this function before ethercat configMap().
-    // There are 4 value for pdo_rank. 1 to 4. other value return false.
+    /**
+     * @brief Use Sync Manager for assign certain TXPDO.
+     * @return true if successed.
+     * @note - slave must in PRE_OP.
+     * @note - Use this function before ethercat configMap().
+     * @note - There are 4 value for pdo_rank. 1 to 4. other value return false.
+     * @note - rank 1st index address: 0x1A00
+     * @note - rank 2st index address: 0x1A01
+     * @note - rank 3st index address: 0x1A02
+     * @note - rank 4st index address: 0x1A03
+     */
     bool assignTxPDO_rank(int pdo_rank);
 
-    // Return current rank of RxPDO
-    // Rank is the which PDO mapping selected. Range: 1, 2, 3, 4
-    // If not success to read return 0.
-    uint16_t getRxPDO_rank(void);
+    /**
+     * @brief Get current index address of RxPDO.
+     * @return 0 if not successed.
+     */
+    uint16_t getRxPDOIndex(void);
 
-    // Return current rank of TxPDO
-    // Rank is the which PDO mapping selected. Range: 1, 2, 3, 4
-    // If not success to read return 0.
-    uint16_t getTxPDO_rank(void);
+    /**
+     * @brief Get current index address of TxPDO.
+     * @return 0 if not successed.
+     */
+    uint16_t getTxPDOIndex(void);
 
-    /* 
-    Set RxPDO object vector.
-    num_enteries: number of object that want to set in PDO mapping.
-    mapping_entry: array of objects for set PDO mapping
-    Note: set assignRxPDO_rank(int pdo_rank) before use this function.
-    Note: slave must in PRE_OP.
-    Use this function before ethercat configMap().
-    return: true if successed. 
-    */
+    /**
+     * @brief Set RxPDO object vector.
+     * @param num_enteries number of object that want to set in PDO mapping.
+     * @param mapping_entry array of objects for set PDO mapping.
+     * @return true if successed.
+     * @note - set assignRxPDO_rank(int pdo_rank) before use this function.
+     * @note - slave must in PRE_OP.
+     * @note - Use this function before ethercat configMap().
+     */
     bool setRxPDO(uint8_t num_enteries, uint32_t* mapping_entry);
 
-    /* 
-    Set RxPDO object vector.
-    num_enteries: number of object that want to set in PDO mapping.
-    mapping_entry: array of objects for set PDO mapping
-    Note: set assignTxPDO_rank(int pdo_rank) before use this function.
-    Note: slave must in PRE_OP.
-    Use this function before ethercat configMap().
-    return: true if successed. 
-    */
+    /**
+     * @brief Set RxPDO object vector.
+     * @param num_enteries number of object that want to set in PDO mapping.
+     * @param mapping_entry array of objects for set PDO mapping
+     * @return true if successed. 
+     * @note - set assignTxPDO_rank(int pdo_rank) before use this function.
+     * @note - slave must in PRE_OP.
+     * @note - Use this function before ethercat configMap().
+     */
     bool setTxPDO(uint8_t num_enteries, uint32_t* mapping_entry);
 
     // +++++++++++++++++++++++++++++++++++++++++++++++++++++
     // Set/Get Driver ID:
 
-    /*
-    Set  Motor ID. it is specific for each model of motor. 
-    Hint: dont set incorrectly. in most cases it is not require set. driver automaticlly identify 
-    and set it after connect encoder cable and reset of power.
-    return: true if successed.
-    */
+    /**
+     * @brief Set  Motor ID. it is specific for each model of motor. 
+     * @return true if successed.
+     * @warning dont set incorrectly. in most cases it is not require set. driver automaticlly identify 
+     * and set it after connect encoder cable and reset of power.
+     */
     bool setMotorID(uint16_t ID);
 
-    // Get  Motor ID. it is specific for each model of motor. 
-    // return: -1 if not successed.
+    /**
+     * @brief Get  Motor ID. it is specific for each model of motor.
+     * @return -1 if not successed.
+     */
     int16_t getMotorID(void);
 
     // +++++++++++++++++++++++++++++++++++++++++++++++++++++
     // Get Driver Node ID:
 
-    // Return NodeId value. NodeID can set physically on the driver fuselage.
-    // return: -1 if not successed.
+    /**
+     * @brief Get NodeId value. NodeID can set physically on the driver fuselage.
+     * @return -1 if not successed.
+     */
     int16_t getNodeID(void);
 
     // +++++++++++++++++++++++++++++++++++++++++++++++++++++
     // Set/Get encoder configuration:
 
-    /*
-    Set Encoder type. it is specific for each encoder of motor. 
-    Hint: dont set incorrectly. in most cases it is not require set. driver automaticlly identify 
-    and set it after connect encoder cable and reset of power.
-    Return values           Encoder Type
-    0                       Quadrature (incremental, A lead B)
-    1                       Quadrature (incremental, B lead A)
-    2                       BiSS Serial (single-turn only)
-    3                       Reserved
-    4                       BiSS Serial Absolute (multi-turn 16-bit)
-    5 to 6                  Reserved
-    7                       Sinusoidal(1Vpp)
-    8                       Analog Hall
-    9 to 10                 Reserved
-    11                      Tamagawa Serial (single-turn only)
-    12                      Tamagawa Serial Absolute (multi-turn 16-bit)
-    13                      EnDat 2.2 Serial
-
-    return: true if successed.
-    */
+    /**
+     * @brief Set Encoder type. it is specific for each encoder of motor. 
+     * @return true if successed.
+     * @note - type: 0 -> Quadrature (incremental, A lead B)        
+     * @note - type: 1 -> Quadrature (incremental, B lead A)
+     * @note - type: 2 -> BiSS Serial (single-turn only)
+     * @note - type: 3 -> Reserved
+     * @note - type: 4 -> BiSS Serial Absolute (multi-turn 16-bit)
+     * @note - type: 5 to 6 -> Reserved 
+     * @note - type: 7 -> Sinusoidal(1Vpp) 
+     * @note - type: 8 -> Analog Hall
+     * @note - type: 9 to 10 -> Reserved
+     * @note - type: 11 -> Tamagawa Serial (single-turn only)
+     * @note - type: 12 -> Tamagawa Serial Absolute (multi-turn 16-bit)
+     * @note - type: 13 -> EnDat 2.2 Serial
+     * @warning dont set incorrectly. in most cases it is not require set. driver automaticlly identify 
+     * and set it after connect encoder cable and reset of power.
+     */
     bool setEncoderType(uint16_t type);
 
-    /* 
-    Get Encoder type. it is specific for each encoder of motor. 
-    Return values           Encoder Type
-    0                       Quadrature (incremental, A lead B)
-    1                       Quadrature (incremental, B lead A)
-    2                       BiSS Serial (single-turn only)
-    3                       Reserved
-    4                       BiSS Serial Absolute (multi-turn 16-bit)
-    5 to 6                  Reserved
-    7                       Sinusoidal(1Vpp)
-    8                       Analog Hall
-    9 to 10                 Reserved
-    11                      Tamagawa Serial (single-turn only)
-    12                      Tamagawa Serial Absolute (multi-turn 16-bit)
-    13                      EnDat 2.2 Serial
-
-    return: -1 if not successed.
-    */
+    /**
+     * @brief Get Encoder type. it is specific for each encoder of motor.
+     * @return -1 if not successed.
+     * @note - type: 0 -> Quadrature (incremental, A lead B)        
+     * @note - type: 1 -> Quadrature (incremental, B lead A)
+     * @note - type: 2 -> BiSS Serial (single-turn only)
+     * @note - type: 3 -> Reserved
+     * @note - type: 4 -> BiSS Serial Absolute (multi-turn 16-bit)
+     * @note - type: 5 to 6 -> Reserved 
+     * @note - type: 7 -> Sinusoidal(1Vpp) 
+     * @note - type: 8 -> Analog Hall
+     * @note - type: 9 to 10 -> Reserved
+     * @note - type: 11 -> Tamagawa Serial (single-turn only)
+     * @note - type: 12 -> Tamagawa Serial Absolute (multi-turn 16-bit)
+     * @note - type: 13 -> EnDat 2.2 Serial
+     */
     int16_t getEncoderType(void);
 
-    // Return number of pulses or value for one revolution of motor.
-    // return: 0 if not successed.
+    /**
+     * @brief Get number of pulses or value for one revolution of motor.
+     * Shows the encoder resolution in the unit of pulse (count) based on a multiple of 4.
+     * @return 0 if not successed.
+     */
     uint32_t getEncoderPulsePerRevolution(void);
 
-    /* Set direction of rotation relative to the command value. 
-    dir value:
-    0    With a positive command, the motor rotates counterclockwise. Then, the position feedback value increases.
-    1    With a positive command, the motor rotates clockwise. Then, the position feedbackvalue increases.
-
-    return: true if successed.
-    */
+    /**
+     * @brief Set direction of rotation relative to the command value.
+     * @param dir is direction value. 0:CCW, 1:CW
+     * @return true if successed.
+     * @note - dir: 0 -> With a positive command, the motor rotates counterclockwise. Then, the position feedback value increases.
+     * @note - dir: 1 -> With a positive command, the motor rotates clockwise. Then, the position feedbackvalue increases.
+     * @note - Change attribute: Servo off
+     */
     bool setRotationDirectionSelect(uint16_t dir);
 
-    /* Get direction of rotation relative to the command value. 
-    return value:
-    0    With a positive command, the motor rotates counterclockwise. Then, the position feedback value increases.
-    1    With a positive command, the motor rotates clockwise. Then, the position feedbackvalue increases.
-    2    if not successed.
-    */
+    /**
+     * @brief Get direction of rotation relative to the command value.
+     * @return - 0:    With a positive command, the motor rotates counterclockwise. Then, the position feedback value increases.   
+     * @return - 1:    With a positive command, the motor rotates clockwise. Then, the position feedbackvalue increases.   
+     * @return - 2:    if not successed.   
+     */
     uint8_t getRotationDirectionSelect(void);
     
     /* 
@@ -328,8 +355,6 @@ public:
     // Driver must be in ethercat operational state.
     bool servoOffPDO(void);
 
-    bool isServoON(void);
-
     // +++++++++++++++++++++++++++++++++++++++++++++++++++++
     // Controlword, statusword, Operation mode and machin state
     
@@ -387,9 +412,6 @@ public:
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // Set/Get Torque:
 
-    // Set the design rate torque value [N.m] for Servo motor. Its depend on manufacture designing.
-    void setRatedTorque(double value);
-
     // Set Target Torque in SDO mode. [0.1%]
     // return: true if successed.
     bool setTargetTorqueSDO(int16_t torque);
@@ -423,7 +445,7 @@ public:
     bool setTorqueSlopeSDO(uint32_t slope);
 
     /**
-     * This specifies the function to limit the output torque of the drive.   
+     * @brief This specifies the function to limit the output torque of the drive.
      *  
      * | Setting values  |                                     Description                                      |
      * |:---------------:|--------------------------------------------------------------------------------------|
@@ -455,30 +477,44 @@ public:
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // Set/Get Velocity:
 
-    // Get Velocity Actual Value in SDO mode. [pulses/s]
+    /**
+     * @brief Get Velocity Actual Value in SDO mode. [pulses/s]
+     */
     int32_t getVelocityActualSDO(void);
 
-    // Get Velocity Demand Value in SDO mode. [pulses/s]
+    /**
+     * @brief Get Velocity Demand Value in SDO mode. [pulses/s]
+     */
     int32_t getVelocityDemandSDO(void);
 
-    // Get Velocity Demand Value in PDO mode. [pulses/s]
-    // Hint: Use it when VelocityDemandValue exist in PDO mapping, otherwise return incorrect value.
+    /**
+     * @brief Get Velocity Demand Value in PDO mode. [pulses/s]
+     * @warning  Use it when VelocityDemandValue exist in PDO mapping, otherwise return incorrect value.
+     */
     int32_t getVelocityDemandPDO(void);
 
-    // Get Velocity Actual Value in PDO mode. [pulses/s]
-    // Hint: Use it when VelocityActualValue exist in PDO mapping, otherwise return incorrect value.
+    /**
+     * @brief Get Velocity Actual Value in PDO mode. [pulses/s]
+     * @warning Use it when VelocityActualValue exist in PDO mapping, otherwise return incorrect value.
+     */
     int32_t getVelocityActualPDO(void);
 
-    // Set Target Velocity in PDO mode. [pulses/s]
-    // Hint: Use it when TargetVelocity exist in PDO mapping, otherwise set incorrect value.
+    /**
+     * @brief Set Target Velocity in PDO mode. [pulses/s]
+     * @warning Use it when TargetVelocity exist in PDO mapping, otherwise set incorrect value.
+     */
     bool setTargetVelocityPDO(int32_t velocity);
 
-    // Set Target Velocity in SDO mode. [pulses/s]
-    // return: true if successed.
+    /**
+     * @brief Set Target Velocity in SDO mode. [pulses/s]
+     * @return true if successed.
+     */
     bool setTargetVelocitySDO(int32_t velocity);
 
-    // Set Max Profile Velocity in SDO mode. [pulses/s]
-    // return: true if successed.
+    /**
+     * @brief Set Max Profile Velocity in SDO mode. [pulses/s]
+     * @return true if successed.
+     */
     bool setMaxProfileVelocitySDO(uint32_t velocity);
 
     /**
@@ -496,17 +532,17 @@ public:
     bool setSpeedLimitValueAtTorqueControlMode(uint16_t value);
 
     /**
-     * This represents the current rotation speed of the motor. [rpm]
+     * @brief This represents the current rotation speed of the motor. [rpm]
      */
     int16_t getFeedbackSpeedSDO(void);
 
     /**
-     * This represents the current rotation speed of the motor. [rpm]
+     * @brief This represents the current rotation speed of the motor. [rpm]
      */
     int16_t getFeedbackSpeedPDO(void);
 
     /**
-     * This represents the rated speed of the driving motor. [RPM]
+     * @brief This represents the rated speed of the driving motor. [RPM]
      */
     uint16_t getMotorRatedSpeed(void);
     
@@ -548,38 +584,56 @@ public:
     // +++++++++++++++++++++++++++++++++++++++++++++++++
     // Set/Get Acceleration:
 
-    // Set Profile Acceleration in SDO mode. [pulses/s^2]
+    /**
+     * @brief Set Profile Acceleration in SDO mode. [pulses/s^2]
+     */
     bool setProfileAccelerationSDO(int32_t acc);
 
-    // Set Profile Deceleration in SDO mode. [pulses/s^2]
+    /**
+     * @brief Set Profile Deceleration in SDO mode. [pulses/s^2]
+     */
     bool setProfileDecelerationSDO(int32 acc);
 
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // Get/Set Position:
 
-    // Set Target Position in SDO mode. [pulses]
-    // return: true if successed.
+    /**
+     * @brief Set Target Position in SDO mode. [pulses]
+     * @return true if successed.
+     */
     bool setTargetPositionSDO(int32_t position);
 
-    // Set Target Position in PDO mode. [pulses]
-    // Hint: Use it when TargetPosition exist in PDO mapping, otherwise set incorrect value.
+    /**
+     * @brief Set Target Position in PDO mode. [pulses]
+     * @warning Use it when TargetPosition exist in PDO mapping, otherwise set incorrect value.
+     */
     bool setTargetPositionPDO(int32_t position);
 
-    // This represents the value entered as the command during the position control in SDO mode. [pulses]
+    /**
+     * @brief This represents the value entered as the command during the position control in SDO mode. [pulses]
+     */
     int32_t getPositionDemandInternalSDO(void);
 
-    // Get Position Actual Internal Value in SDO mode. [pulses]
+    /**
+     * @brief Get Position Actual Internal Value in SDO mode. [pulses]
+     */
     int32_t getPositionActualInternalSDO(void);
 
-    // Get Position Actual Internal Value in PDO mode. [pulses]
-    // Hint: Use it when PositionActualInternalValue exist in PDO mapping, otherwise return incorrect value.
+    /**
+     * @brief Get Position Actual Internal Value in PDO mode. [pulses]
+     * @warning Use it when PositionActualInternalValue exist in PDO mapping, otherwise return incorrect value.
+     */
     int32_t getPositionActualInternalPDO(void);
 
-    // Get Position Actual Value in SDO mode. [pulses]
+    /**
+     * @brief Get Position Actual Value in SDO mode. [pulses]
+     */
     int32_t getPositionActualSDO(void);
 
-    // Get Position Actual Value in PDO mode. [pulses]
-    // Hint: Use it when PositionActualValue exist in PDO mapping, otherwise return incorrect value.
+    /**
+     * @brief Get Position Actual Value in PDO mode. [pulses]
+     * @warning Use it when PositionActualValue exist in PDO mapping, otherwise return incorrect value.
+     */
     int32_t getPositionActualPDO(void);
 
     // ++++++++++++++++++++++++++++++++++++++++++++++++
@@ -691,14 +745,19 @@ public:
 
 private:
 
-    // Access the process data inputs.
+    // speed conversion gain for convert step unit to user unit.
+    float _velConStep2Uu;
+
+    uint32_t _PulsePerRevolution;
+
+    /// Access the process data inputs.
     uint8 *inputs;
 
-    // Access the process data outputs.
+    /// Access the process data outputs.
     uint8 *outputs;
 
-    uint8_t RxPDO_rank;     // rank range: 1, 2, 3, 4
-    uint8_t TxPDO_rank;     // rank range: 1, 2, 3, 4
+    uint8_t RxPDO_rank;     ///< rank range: 1, 2, 3, 4
+    uint8_t TxPDO_rank;     ///< rank range: 1, 2, 3, 4
 
     // Offset value for RX mapping
     uint8_t RxMapOffset_ControlWord;
@@ -708,16 +767,17 @@ private:
     uint8_t RxMapOffset_DigitalOutput_PhysicalOutputs;
     uint8_t RxMapOffset_ModesOfOperation;
 
-    /*
-    _RxMapFlag indexes:
-    0: ControlWord
-    1: TargetPosition
-    2: TargetVelocity
-    3: TargetTorque
-    4: DigitalOutput_PhysicalOutputs
-    5: ModesOfOperation
-    */
-    uint8_t _RxMapFlag[6] = {0, 0, 0, 0, 0, 0};
+    /**
+     * @brief _RxMapFlag indexes
+     * @note Array cells:
+     * @note - 0: ControlWord
+     * @note - 1: TargetPosition
+     * @note - 2: TargetVelocity
+     * @note - 3: TargetTorque
+     * @note - 4: DigitalOutput_PhysicalOutputs
+     * @note - 5: ModesOfOperation
+     */
+    uint8_t _RxMapFlag[6];
 
     // Offset value for TX mapping
     uint8_t TxMapOffset_StatusWord;
@@ -733,46 +793,23 @@ private:
     uint8_t TxMapOffset_DigitalInput;
     uint8_t TxMapOffset_OperationModeDisplay;
 
-    /*
-    _TxMapFlag indexes :
-     0: StatusWord
-     1: PositionActualInternal
-     2: PositionActual
-     3: VelocityActual
-     4: TorqueActual
-     5: PositionDemandInternal
-     6: PositionDemand
-     7: VelocityDemand
-     8: FeedbackSpeed
-     9: TorqueDemand
-     10: DigitalInput
-     11: OperationModeDisplay
-    */
-    uint8_t _TxMapFlag[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-
-    // State machine of motor driver
-    enum stateMachine_enum
-    {
-        None,
-        NotReadyToSwitchOn,          
-        SwitchOnDisabled,             
-        ReadyToSwitchOn,          
-        SwitchedOn,                
-        OperationEnabled,  
-        QuickStopActive,        
-        FaultReactionActive,     
-        Fault                    
-    }stateMachine = None;
-
-    // State of main power off/on. On: TRUE, Off: FALSE.
-    bool state_MainPowerOn;      
-
-    // state of warning is accurred. Warrning: TRUE, No warrning: FALSE.              
-    bool state_WarningIsOccurred;  
-
-    // Rated torque. [N.m]
-    double ratedTorque;
-
+    /**
+     * @brief _TxMapFlag indexes
+     * @note Array cells:
+     * @note - 0: StatusWord
+     * @note - 1: PositionActualInternal
+     * @note - 2: PositionActual
+     * @note - 3: VelocityActual
+     * @note - 4: TorqueActual
+     * @note - 5: PositionDemandInternal
+     * @note - 6: PositionDemand
+     * @note - 7: VelocityDemand
+     * @note - 8: FeedbackSpeed
+     * @note - 9: TorqueDemand
+     * @note - 10: DigitalInput
+     * @note - 11: OperationModeDisplay
+     */
+    uint8_t _TxMapFlag[12];
 };
 
 #endif
