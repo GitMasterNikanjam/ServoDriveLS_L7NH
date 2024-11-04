@@ -847,12 +847,25 @@ bool L7NH::servoOffPDO(void)
         return false;
     }
 
+    // Send "Ready to Disable Operation" command
+    if (setControlWordPDO(0x0007)) 
+    {
+        ec_send_processdata();
+        ec_receive_processdata(EC_TIMEOUTRET);
+        osal_usleep(1000); // Sleep for 10ms
+    } 
+    else 
+    {
+        printf("Failed to set control word for Disable Operation.\n");
+        return false;
+    }
+
     // Send "Ready to Switch Off" command
     if (setControlWordPDO(0x0006)) 
     {
         ec_send_processdata();
         ec_receive_processdata(EC_TIMEOUTRET);
-        osal_usleep(10000); // Sleep for 10ms
+        osal_usleep(1000); // Sleep for 10ms
     } 
     else 
     {
@@ -865,7 +878,7 @@ bool L7NH::servoOffPDO(void)
     {
         ec_send_processdata();
         ec_receive_processdata(EC_TIMEOUTRET);
-        osal_usleep(10000); // Sleep for 10ms
+        osal_usleep(1000); // Sleep for 10ms
     } 
     else 
     {
