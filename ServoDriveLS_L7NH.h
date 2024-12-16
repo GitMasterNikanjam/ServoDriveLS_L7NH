@@ -88,7 +88,7 @@ public:
         float posActTargetDeg;
 
         int32_t velActStep;                 ///< Raw Actual  velocity. [pulses/sec]
-        float velAct;                                                        
+        float velAct;                      ///< Raw Actual  velocity. [deg/sec]                                  
         float velActCmd;                   ///< velActRaw command from out source. [RPM]
         float velActTarget;
 
