@@ -1202,7 +1202,7 @@ uint8_t L7NH::getDigitalInputValuePDO(void)
     uint32_t data = *(uint32_t *)(inputs + TxMapOffset_DigitalInput);
 
     uint8_t value = (uint8_t)((data >> 16) & 0xFF);
-
+    // std::cout << value << std::endl;
     return value;
 }
 
